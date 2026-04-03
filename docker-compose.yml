@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sitescanner
+      POSTGRES_USER: scanner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scannerpassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scanner -d sitescanner"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: node dist/api/server.js
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://scanner:${POSTGRES_PASSWORD:-scannerpassword}@postgres:5432/sitescanner
+      REDIS_URL: redis://redis:6379
+      PORT: 3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SSRF_PROTECTION: ${SSRF_PROTECTION:-true}
+      MAX_SCAN_URLS: ${MAX_SCAN_URLS:-500}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: node dist/worker/worker.js
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://scanner:${POSTGRES_PASSWORD:-scannerpassword}@postgres:5432/sitescanner
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3}
+      BROWSER_TIMEOUT_MS: ${BROWSER_TIMEOUT_MS:-30000}
+      PROBE_TIMEOUT_MS: ${PROBE_TIMEOUT_MS:-15000}
+      MAX_WARM_ATTEMPTS: ${MAX_WARM_ATTEMPTS:-5}
+      WARM_DELAY_MS: ${WARM_DELAY_MS:-500}
+      SSRF_PROTECTION: ${SSRF_PROTECTION:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
