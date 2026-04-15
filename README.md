@@ -4,7 +4,7 @@
   src="https://github.com/user-attachments/assets/7c5d37dd-c03a-4924-9694-e805f66eef47" />
 
 
-> **Vibecoded** with Claude. A web performance and CDN cache scanner that actually warms the cache before measuring it.
+> **Vibecoded** with Claude. Architected and designed by a senior system engineer with more than 10 years of experience working with CDNs. A web performance and CDN cache scanner that actually warms the cache before measuring it.
 
 Most tools fire one HTTP request and read the cache header. Site Scanner does something smarter: it makes a cold request, warms the CDN cache with follow-up requests, then measures real browser performance on the warmed URL. The result is a much more accurate picture of what your users actually experience.
 

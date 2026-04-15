@@ -134,12 +134,15 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
     const latencyMs = Date.now() - t0;
 
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
+      const rawBody = await response.text().catch(() => "");
+      // Scrub any bearer token pattern before logging — defensive measure in case
+      // the upstream server echoes back request metadata in its error payload.
+      const safeBody = rawBody.replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, "Bearer [Redacted]").slice(0, 500);
       log.error(
-        { pageId: state.pageId, url: state.url, httpStatus: response.status, latencyMs, body: body.slice(0, 500) },
+        { pageId: state.pageId, url: state.url, httpStatus: response.status, latencyMs, body: safeBody },
         "AI API returned non-2xx response"
       );
-      throw new Error(`AI API returned ${response.status}: ${body.slice(0, 200)}`);
+      throw new Error(`AI API returned ${response.status}: ${safeBody.slice(0, 200)}`);
     }
 
     const data = (await response.json()) as {
