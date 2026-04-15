@@ -93,6 +93,7 @@ Aggregate view of a completed scan:
 - LCP averages (avg, median, P95)
 - Overall / document / static asset cache hit ratios
 - CDN distribution across all pages
+- **AI cache analysis summary** (when enabled): pages analysed, AI-judged cached count, average AI-estimated hit ratio, average confidence
 
 ### Page table
 Every scanned page in a sortable, filterable table. Filter by CDN provider, cache state, or search by URL. Sort by LCP, TTFB, size, request count, or cache hit ratio.
@@ -145,26 +146,64 @@ Cross-scan comparison. See which pages and scans perform best and worst for LCP,
 
 ## AI Cache Analysis
 
-When **AI cache analysis** is enabled for a scan, each page's response headers (cold and warmed) are sent to an OpenAI-compatible LLM endpoint. The model reasons step-by-step about which headers indicate caching and outputs:
+AI cache analysis is an **optional, per-scan feature** that sends each page's HTTP response headers to an OpenAI-compatible LLM. The model reasons step-by-step about cache state indicators and returns a structured verdict — independently of the built-in CDN adapter logic.
 
-| Field | Description |
+### Why it exists
+
+The conventional cache analysis relies on vendor-specific header adapters (Cloudflare, CloudFront, Fastly, Akamai). If a site sits behind a custom proxy, an obscure CDN, or strips its cache headers, those adapters return `UNKNOWN`. The AI analyser reads the full header set and applies general HTTP caching knowledge, often surfacing useful signal even when no CDN fingerprint is present.
+
+### How it works
+
+AI analysis runs as **Phase 6** of the scan pipeline, after all HTTP probes and cache warming are complete:
+
+```
+Cold probe → Warm loop → CDN detection → Cache normalisation → Browser metrics → Recommendations → AI analysis
+```
+
+For each page the worker sends:
+- The cold probe headers and HTTP status
+- The warmed probe headers and HTTP status (if available)
+- A summary of all warm events (request number, cache state, latency)
+
+The model is instructed to reason about headers including `Cache-Control`, `CF-Cache-Status`, `X-Cache`, `Age`, `Vary`, `Via`, `Set-Cookie`, `Surrogate-Control`, and similar, then return a structured JSON result.
+
+### Output per page
+
+| Field | Type | Description |
+|---|---|---|
+| `cached` | boolean | Whether the response was judged to be served from cache |
+| `reasoning` | string | Step-by-step explanation referencing specific headers |
+| `cache_hit_ratio` | float 0–1 | Estimated proportion of requests that would be cache hits |
+| `confidence` | float 0–1 | Model's self-assessed confidence in the verdict |
+| `model` | string | The model that produced this result |
+
+Stored as `ai_cache_analysis` JSONB on the `page_results` table. Visible in the **Page Detail** view.
+
+### Aggregate at scan level
+
+When AI analysis was enabled the **Scan Dashboard** shows a summary card with:
+- Pages successfully analysed vs. total scanned
+- Count of pages the AI judged as cached
+- Average AI-estimated cache hit ratio across all pages
+- Average confidence (colour-coded: green ≥70%, yellow ≥40%, red <40%)
+
+### Available models
+
+| Model | Notes |
 |---|---|
-| **Cached** | Boolean verdict — was this response served from cache? |
-| **Reasoning** | Natural-language explanation of what headers led to the conclusion |
-| **AI hit ratio** | Model-estimated cache hit ratio (0–100%) |
-| **Confidence** | How confident the model is (0–100%) |
-
-This analysis is independent of CDN-specific header patterns and can surface cache behaviour on custom or obscure CDN setups that the built-in adapters don't recognise.
+| `gemma3:27b` | Default — good balance of speed and reasoning quality |
+| `gemma4:31b` | Larger model, more thorough step-by-step reasoning |
+| `gpt-oss:latest` | Alternative open-source model |
 
 ### Enabling AI analysis
 
-1. Tick **AI cache analysis** when creating a scan
-2. Select the model: `gemma3:27b` (default), `gemma4:31b`, or `gpt-oss:latest`
-3. Set `AI_API_BASE_URL` and `OPENAI_API_KEY` in your `.env` file
+1. Tick **AI cache analysis** in the New Scan form
+2. Select the model from the dropdown that appears
+3. Set `AI_API_BASE_URL` and `OPENAI_API_KEY` in `.env`
 
-The AI endpoint must expose an OpenAI-compatible `/chat/completions` path. The configured `AI_API_BASE_URL` is used as-is — the worker appends `/chat/completions` to form the full request URL.
+The worker calls `${AI_API_BASE_URL}/chat/completions` — a standard OpenAI-compatible endpoint. Set temperature `0.1`, `max_tokens: 512`.
 
-AI analysis failures (network errors, rate limits, parse errors) are non-fatal: the scan continues and the AI result for that page is simply omitted.
+**Failures are non-fatal.** Network errors, HTTP errors, timeouts, and JSON parse failures are logged and skipped — the scan continues and the AI result for that page is simply absent. Set `LOG_LEVEL=debug` to see the full request payload and raw model response in worker logs.
 
 ---
 
