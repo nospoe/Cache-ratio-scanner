@@ -6,12 +6,15 @@ export const AkamaiAdapter: CdnAdapter = {
   name: "akamai",
 
   detect(headers: Record<string, string>): boolean {
+    const server = getHeader(headers, "server")?.toLowerCase() ?? "";
     return (
       hasHeader(headers, "x-akamai-request-id") ||
       hasHeader(headers, "x-akamai-transformed") ||
+      hasHeader(headers, "x-akamai-session-info") ||
       hasHeader(headers, "x-check-cacheable") ||
-      getHeader(headers, "server")?.toLowerCase().includes("akamaighost") === true ||
-      getHeader(headers, "x-cache-key") !== undefined
+      hasHeader(headers, "x-cache-key") ||
+      server.includes("akamaighost") ||
+      server.includes("akamai")
     );
   },
 
@@ -63,7 +66,7 @@ export const AkamaiAdapter: CdnAdapter = {
     const cacheKey = getHeader(headers, "x-cache-key");
     if (cacheKey) signals.push(`x-cache-key present`);
     const server = getHeader(headers, "server");
-    if (server?.toLowerCase().includes("akamaighost")) signals.push(`server: ${server}`);
+    if (server?.toLowerCase().includes("akamai")) signals.push(`server: ${server}`);
     return signals;
   },
 
@@ -79,7 +82,7 @@ export const AkamaiAdapter: CdnAdapter = {
     let score = 0;
     if (hasHeader(headers, "x-akamai-request-id")) score += 0.5;
     if (hasHeader(headers, "x-cache-key")) score += 0.2;
-    if (getHeader(headers, "server")?.toLowerCase().includes("akamaighost")) score += 0.2;
+    if (getHeader(headers, "server")?.toLowerCase().includes("akamai")) score += 0.2;
     if (hasHeader(headers, "x-check-cacheable")) score += 0.1;
     return Math.min(score, 1.0);
   },

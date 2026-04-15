@@ -18,6 +18,7 @@ Analyze the provided headers and reason step-by-step about the cache state. Cons
 - Via, X-Served-By (proxy/CDN routing signals)
 - Set-Cookie (often prevents caching)
 - Surrogate-Control, Surrogate-Key (CDN override headers)
+- Akamai-specific: x-akamai-request-id, x-check-cacheable, x-cache-key, x-cache (TCP_HIT/TCP_MISS/TCP_EXPIRED_HIT), server: AkamaiGHost or "Akamai Image Manager"
 
 After reasoning, output ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
 {
