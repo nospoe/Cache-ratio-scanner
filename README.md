@@ -1,4 +1,4 @@
-# Site Scanner
+# Site Scanner and CDN performance analysis tool
 
   <img width="800" alt="Screenshot 2026-04-03 at 22 17 27"
   src="https://github.com/user-attachments/assets/7c5d37dd-c03a-4924-9694-e805f66eef47" />
