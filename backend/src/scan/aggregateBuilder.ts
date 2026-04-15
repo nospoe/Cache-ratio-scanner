@@ -32,7 +32,13 @@ export async function buildAggregate(
       ) as document_cache_hit_ratio,
       AVG(cache_hit_ratio) FILTER (
         WHERE content_type NOT ILIKE '%html%' AND cache_hit_ratio IS NOT NULL
-      ) as static_asset_cache_hit_ratio
+      ) as static_asset_cache_hit_ratio,
+      COUNT(*) FILTER (WHERE ai_cache_analysis IS NOT NULL) as ai_pages_analyzed,
+      COUNT(*) FILTER (WHERE (ai_cache_analysis->>'cached')::boolean = true) as ai_cached_count,
+      AVG((ai_cache_analysis->>'cache_hit_ratio')::numeric)
+        FILTER (WHERE ai_cache_analysis IS NOT NULL) as avg_ai_cache_hit_ratio,
+      AVG((ai_cache_analysis->>'confidence')::numeric)
+        FILTER (WHERE ai_cache_analysis IS NOT NULL) as avg_ai_confidence
     FROM page_results
     WHERE scan_id = $1`,
     [scanId]
@@ -71,5 +77,9 @@ export async function buildAggregate(
     non_cacheable_html_count: parseInt(String(s.non_cacheable_html_count ?? 0)),
     error_page_count: parseInt(String(s.error_page_count ?? 0)),
     scan_duration_ms: scanDurationMs,
+    ai_pages_analyzed: parseInt(String(s.ai_pages_analyzed ?? 0)),
+    ai_cached_count: parseInt(String(s.ai_cached_count ?? 0)),
+    avg_ai_cache_hit_ratio: s.avg_ai_cache_hit_ratio != null ? parseFloat(String(s.avg_ai_cache_hit_ratio)) : null,
+    avg_ai_confidence: s.avg_ai_confidence != null ? parseFloat(String(s.avg_ai_confidence)) : null,
   };
 }

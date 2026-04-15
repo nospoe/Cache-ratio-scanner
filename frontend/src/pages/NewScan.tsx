@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { scanApi } from "../api/client";
-import type { ScanMode, CreateScanRequest } from "../types";
+import type { ScanMode, AiModel, CreateScanRequest } from "../types";
 import { ChevronDown, ChevronUp, Globe, List, Map, Search } from "lucide-react";
 import clsx from "clsx";
 
@@ -34,6 +34,8 @@ export default function NewScan() {
     normalizeQuerystrings: boolean;
     scanPerformance: boolean;
     scanCache: boolean;
+    aiCacheAnalysis: boolean;
+    aiModel: AiModel;
     includePattern: string;
     excludePattern: string;
   }>({
@@ -49,6 +51,8 @@ export default function NewScan() {
     normalizeQuerystrings: false,
     scanPerformance: true,
     scanCache: true,
+    aiCacheAnalysis: false,
+    aiModel: "gemma3:27b",
     includePattern: "",
     excludePattern: "",
   });
@@ -84,6 +88,7 @@ export default function NewScan() {
         crawlDelay: 0,
         includePattern: settings.includePattern || undefined,
         excludePattern: settings.excludePattern || undefined,
+        aiModel: settings.aiCacheAnalysis ? settings.aiModel : undefined,
       },
     });
   };
@@ -193,25 +198,54 @@ export default function NewScan() {
         </div>
 
         {/* Scan type toggles */}
-        <div className="flex gap-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.scanPerformance}
-              onChange={(e) => setSettings((s) => ({ ...s, scanPerformance: e.target.checked }))}
-              className="rounded border-gray-300 text-blue-600"
-            />
-            <span className="text-sm text-gray-700">Performance metrics (browser)</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.scanCache}
-              onChange={(e) => setSettings((s) => ({ ...s, scanCache: e.target.checked }))}
-              className="rounded border-gray-300 text-blue-600"
-            />
-            <span className="text-sm text-gray-700">CDN cache analysis</span>
-          </label>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.scanPerformance}
+                onChange={(e) => setSettings((s) => ({ ...s, scanPerformance: e.target.checked }))}
+                className="rounded border-gray-300 text-blue-600"
+              />
+              <span className="text-sm text-gray-700">Performance metrics (browser)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.scanCache}
+                onChange={(e) => setSettings((s) => ({ ...s, scanCache: e.target.checked }))}
+                className="rounded border-gray-300 text-blue-600"
+              />
+              <span className="text-sm text-gray-700">CDN cache analysis</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.aiCacheAnalysis}
+                onChange={(e) => setSettings((s) => ({ ...s, aiCacheAnalysis: e.target.checked }))}
+                className="rounded border-gray-300 text-purple-600"
+              />
+              <span className="text-sm text-gray-700">AI cache analysis</span>
+            </label>
+          </div>
+
+          {settings.aiCacheAnalysis && (
+            <div className="flex items-center gap-3 pl-1">
+              <label className="text-sm text-gray-600 whitespace-nowrap">AI model</label>
+              <select
+                value={settings.aiModel}
+                onChange={(e) => setSettings((s) => ({ ...s, aiModel: e.target.value as AiModel }))}
+                className="input py-1 text-sm w-auto"
+              >
+                <option value="gemma3:27b">gemma3:27b</option>
+                <option value="gemma4:31b">gemma4:31b</option>
+                <option value="gpt-oss:latest">gpt-oss:latest</option>
+              </select>
+              <p className="text-xs text-gray-400">
+                Uses AI to reason about cache headers and estimate hit ratio per page
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Advanced settings */}

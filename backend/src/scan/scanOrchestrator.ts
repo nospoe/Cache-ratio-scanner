@@ -5,6 +5,7 @@ import { normalizeCacheOutput } from "../plugins/cacheNormalizer";
 import { runChallengeDetection } from "../plugins/challengeDetector";
 import { runBrowserCollection } from "../plugins/browserCollector";
 import { generateRecommendations } from "../plugins/recommendationEngine";
+import { runAiCacheAnalysis } from "../plugins/aiCacheAnalyzer";
 import { createPageResult, updatePageResult, updatePageStatus } from "../db/repositories/pageRepo";
 import { insertCacheEvents } from "../db/repositories/cacheEventRepo";
 import { childLogger } from "../utils/logger";
@@ -65,6 +66,11 @@ export async function orchestratePage(
 
     // Phase 5: Recommendations
     state = generateRecommendations(state);
+
+    // Phase 6: AI cache analysis (optional, runs after all probe data is collected)
+    if (settings.aiCacheAnalysis) {
+      state = await runAiCacheAnalysis(state);
+    }
 
     log.info({ pageId, url, warmOutcome: state.cacheNormalizer?.warm_outcome }, "Page scan complete");
   } catch (err) {

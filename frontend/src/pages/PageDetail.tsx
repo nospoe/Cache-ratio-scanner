@@ -11,7 +11,7 @@ import {
   lcpTrend, ttfbTrend, clsTrend, tbtTrend,
 } from "../utils/format";
 import { ChevronLeft, AlertTriangle, CheckCircle, Info } from "lucide-react";
-import type { CacheEvent, Recommendation } from "../types";
+import type { CacheEvent, Recommendation, AiCacheAnalysisResult } from "../types";
 import clsx from "clsx";
 
 function CacheEventsTable({ events }: { events: CacheEvent[] }) {
@@ -63,6 +63,55 @@ function CacheEventsTable({ events }: { events: CacheEvent[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
+  const hitPct = Math.round(result.cache_hit_ratio * 100);
+  const confPct = Math.round(result.confidence * 100);
+
+  return (
+    <Card padding="none">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+        <h2 className="font-semibold text-gray-900">AI Cache Analysis</h2>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+          {result.model}
+        </span>
+        <span className={clsx(
+          "text-xs px-2 py-0.5 rounded-full font-medium ml-auto",
+          result.cached ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+        )}>
+          {result.cached ? "Cached" : "Not cached"}
+        </span>
+      </div>
+      <div className="p-6 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-1">AI-estimated cache hit ratio</p>
+            <p className="text-2xl font-bold text-gray-900">{hitPct}%</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-1">Analysis confidence</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-gray-100 rounded-full h-2">
+                <div
+                  className={clsx(
+                    "h-2 rounded-full",
+                    confPct >= 70 ? "bg-green-500" : confPct >= 40 ? "bg-yellow-400" : "bg-red-400"
+                  )}
+                  style={{ width: `${confPct}%` }}
+                />
+              </div>
+              <span className="text-sm font-medium text-gray-700">{confPct}%</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1">Reasoning</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{result.reasoning}</p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -331,6 +380,11 @@ export default function PageDetail() {
           )}
         </div>
       </Card>
+
+      {/* AI cache analysis */}
+      {page.ai_cache_analysis && (
+        <AiCacheAnalysisCard result={page.ai_cache_analysis} />
+      )}
 
       {/* Response headers */}
       <Card padding="none">

@@ -10,7 +10,9 @@ import { ProgressBar } from "../components/ui/ProgressBar";
 import {
   formatMs, formatRatio, formatDate, lcpTrend, ttfbTrend
 } from "../utils/format";
+import { Brain } from "lucide-react";
 import { Download, List, BarChart2, X } from "lucide-react";
+import clsx from "clsx";
 import type { Scan } from "../types";
 
 function ScanProgressCard({ scan }: { scan: Scan }) {
@@ -240,6 +242,55 @@ export default function ScanDashboard() {
         </>
       )}
 
+      {/* AI cache analysis summary */}
+      {scan.settings.aiCacheAnalysis && agg && (
+        <Card className="border-purple-100 bg-purple-50/40">
+          <div className="flex items-center gap-2 mb-4">
+            <Brain className="w-4 h-4 text-purple-600" />
+            <p className="text-sm font-semibold text-purple-900">AI Cache Analysis</p>
+            <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+              {scan.settings.aiModel ?? "gemma3:27b"}
+            </span>
+          </div>
+          {agg.ai_pages_analyzed === 0 ? (
+            <p className="text-sm text-purple-600">No pages were successfully analysed by AI yet.</p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-purple-500 mb-0.5">Pages analysed</p>
+                <p className="font-semibold text-purple-900">{agg.ai_pages_analyzed}</p>
+              </div>
+              <div>
+                <p className="text-xs text-purple-500 mb-0.5">AI-judged cached</p>
+                <p className="font-semibold text-purple-900">{agg.ai_cached_count}</p>
+              </div>
+              <div>
+                <p className="text-xs text-purple-500 mb-0.5">Avg AI hit ratio</p>
+                <p className="font-semibold text-purple-900">{formatRatio(agg.avg_ai_cache_hit_ratio)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-purple-500 mb-0.5">Avg confidence</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 bg-purple-100 rounded-full h-1.5">
+                    <div
+                      className={clsx(
+                        "h-1.5 rounded-full",
+                        (agg.avg_ai_confidence ?? 0) >= 0.7 ? "bg-green-500" :
+                        (agg.avg_ai_confidence ?? 0) >= 0.4 ? "bg-yellow-400" : "bg-red-400"
+                      )}
+                      style={{ width: `${Math.round((agg.avg_ai_confidence ?? 0) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-purple-900">
+                    {Math.round((agg.avg_ai_confidence ?? 0) * 100)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Settings summary */}
       <Card>
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Scan Settings</p>
@@ -267,6 +318,14 @@ export default function ScanDashboard() {
           <div>
             <p className="text-xs text-gray-400">Cache analysis</p>
             <p className="font-medium">{scan.settings.scanCache ? "Yes" : "No"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-400">AI analysis</p>
+            <p className="font-medium">
+              {scan.settings.aiCacheAnalysis
+                ? (scan.settings.aiModel ?? "gemma3:27b")
+                : "Off"}
+            </p>
           </div>
         </div>
       </Card>

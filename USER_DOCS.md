@@ -80,6 +80,26 @@ Automatically discover pages by following links from a root domain.
 | Desktop | 1280×800 | Default Chrome |
 | Mobile | 390×844 | iPhone 17 Safari + network throttling |
 
+### Scan Options
+
+Before starting a scan you can enable or disable the following analysis types:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| Performance metrics (browser) | On | Collect LCP, FCP, CLS, TBT, TTFB, and resource breakdown via Playwright |
+| CDN cache analysis | On | Probe cache behaviour using HTTP requests and CDN header adapters |
+| AI cache analysis | Off | Use an LLM to reason about response headers and estimate cache hit ratio |
+
+When **AI cache analysis** is enabled, a model selector appears. Available models:
+
+| Model | Description |
+|-------|-------------|
+| `gemma3:27b` | Default — balanced speed and quality |
+| `gemma4:31b` | Larger model, more thorough reasoning |
+| `gpt-oss:latest` | Alternative open-source model |
+
+The AI analysis runs after all HTTP probes are complete for each page and adds an independent cache verdict with reasoning and an estimated hit ratio.
+
 ### Advanced Settings
 
 | Setting | Default | Description |
@@ -150,6 +170,19 @@ Click any page to see its full breakdown:
 | `uncacheable` | Cache-Control headers prevent caching |
 | `challenged` | Challenge or block page detected |
 | `error-response` | Server error during warming |
+
+#### AI Cache Analysis
+
+When AI cache analysis was enabled for the scan, a dedicated card appears on the page detail view showing:
+
+- **Cached** — the model's verdict (Cached / Not cached)
+- **AI-estimated cache hit ratio** — percentage of requests the model predicts would be cache hits based on the headers
+- **Analysis confidence** — how certain the model is (shown as a colour-coded progress bar: green ≥70%, yellow ≥40%, red <40%)
+- **Reasoning** — the model's step-by-step explanation of which headers indicate caching behaviour
+
+The AI analysis is independent of CDN-specific adapters and can identify caching on custom or unrecognised CDN setups. The model used is shown next to the card title.
+
+> **Note:** AI analysis failures (network errors, timeouts, parse errors) are non-fatal. If the AI could not complete analysis for a page, the card is not shown for that page.
 
 #### Recommendations
 Actionable findings categorized by severity:
@@ -231,7 +264,9 @@ Content-Type: application/json
     "maxPages": 100,
     "maxWarmAttempts": 5,
     "scanPerformance": true,
-    "scanCache": true
+    "scanCache": true,
+    "aiCacheAnalysis": false,
+    "aiModel": "gemma3:27b"
   }
 }
 
@@ -299,7 +334,18 @@ WARM_DELAY_MS=500
 
 # Security (disable only for isolated testing)
 SSRF_PROTECTION=true
+
+# AI cache analysis — OpenAI-compatible endpoint
+AI_API_BASE_URL=https://chat.netcentric.biz/api
+OPENAI_API_KEY=your-api-key-here
 ```
+
+#### AI API settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the OpenAI-compatible AI endpoint. The worker appends `/chat/completions` to form the full request URL. |
+| `OPENAI_API_KEY` | *(empty)* | API key sent as `Authorization: Bearer <key>`. Leave empty if the endpoint does not require authentication. |
 
 ### Scaling workers
 
@@ -339,3 +385,9 @@ WORKER_REPLICAS=2 docker-compose up --scale worker=2
 **Performance metrics missing after scan completes**
 - Check `scanPerformance: true` was set in scan settings.
 - Check worker logs for timeout errors — increase `BROWSER_TIMEOUT_MS` for slow sites.
+
+**AI cache analysis card not showing on page detail**
+- AI analysis must be enabled at scan creation time — it cannot be added retroactively.
+- AI failures are non-fatal and silently skipped. Check worker logs for `"AI cache analysis failed"` messages.
+- Verify `AI_API_BASE_URL` and `OPENAI_API_KEY` are set correctly in your `.env` file.
+- The AI endpoint must expose an OpenAI-compatible `/chat/completions` path at the configured base URL.

@@ -5,6 +5,8 @@ export type ScanStatus = "queued" | "running" | "completed" | "failed" | "cancel
 export type DeviceProfile = "desktop" | "mobile" | "custom";
 export type InputType = "single_url" | "url_list" | "sitemap" | "crawl" | "csv";
 
+export type AiModel = "gemma4:31b" | "gemma3:27b" | "gpt-oss:latest";
+
 export interface ScanSettings {
   mode: ScanMode;
   deviceProfile: DeviceProfile;
@@ -29,6 +31,8 @@ export interface ScanSettings {
   basicAuth?: { username: string; password: string };
   scanPerformance: boolean;
   scanCache: boolean;
+  aiCacheAnalysis: boolean;
+  aiModel?: AiModel;
 }
 
 export interface Scan {
@@ -62,6 +66,11 @@ export interface ScanAggregate {
   non_cacheable_html_count: number;
   error_page_count: number;
   scan_duration_ms: number;
+  // AI cache analysis aggregate (only present when aiCacheAnalysis was enabled)
+  ai_pages_analyzed: number;
+  ai_cached_count: number;
+  avg_ai_cache_hit_ratio: number | null;
+  avg_ai_confidence: number | null;
 }
 
 // ─── CDN types ───────────────────────────────────────────────────────────────
@@ -202,6 +211,16 @@ export interface ChallengeDetectorOutput {
   signals: string[];
 }
 
+// ─── AI Cache Analysis ────────────────────────────────────────────────────────
+
+export interface AiCacheAnalysisResult {
+  cached: boolean;
+  reasoning: string;
+  cache_hit_ratio: number; // 0–1
+  confidence: number; // 0–1
+  model: string;
+}
+
 // ─── Recommendation ───────────────────────────────────────────────────────────
 
 export type RecommendationSeverity = "critical" | "warning" | "info";
@@ -246,6 +265,7 @@ export interface PageResult {
   recommendations: Recommendation[];
   performance_score: number | null;
   cache_hit_ratio: number | null;
+  ai_cache_analysis: AiCacheAnalysisResult | null;
 }
 
 // ─── Plugin system ────────────────────────────────────────────────────────────
@@ -271,6 +291,7 @@ export interface PageWorkingState {
   cacheNormalizer?: CacheNormalizerOutput;
   browserMetrics?: BrowserMetrics;
   challengeDetector?: ChallengeDetectorOutput;
+  aiCacheAnalysis?: AiCacheAnalysisResult;
   recommendations: Recommendation[];
   error?: string;
 }

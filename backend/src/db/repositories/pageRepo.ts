@@ -50,8 +50,9 @@ export async function updatePageResult(
       challenge_type = $18,
       recommendations = $19,
       performance_score = $20,
-      cache_hit_ratio = $21
-    WHERE id = $22`,
+      cache_hit_ratio = $21,
+      ai_cache_analysis = $22
+    WHERE id = $23`,
     [
       state.error ? "failed" : "completed",
       warmedProbe?.final_url ?? coldProbe?.final_url ?? null,
@@ -74,6 +75,7 @@ export async function updatePageResult(
       JSON.stringify(state.recommendations),
       browserMetrics?.performance_score ?? null,
       cacheOutput?.cache_hit_ratio ?? null,
+      state.aiCacheAnalysis ? JSON.stringify(state.aiCacheAnalysis) : null,
       id,
     ]
   );
