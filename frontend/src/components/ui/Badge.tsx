@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { NormalizedCacheState, CdnProvider, RecommendationSeverity } from "../../types";
+import type { AiCacheAnalysisResult, NormalizedCacheState, CdnProvider, RecommendationSeverity } from "../../types";
 
 interface BadgeProps {
   label: string;
@@ -45,6 +45,37 @@ const CACHE_STATE_VARIANTS: Record<NormalizedCacheState, BadgeProps["variant"]> 
 export function CacheStateBadge({ state }: { state: NormalizedCacheState | null }) {
   if (!state) return <Badge label="N/A" variant="neutral" />;
   return <Badge label={state} variant={CACHE_STATE_VARIANTS[state]} />;
+}
+
+/**
+ * Like CacheStateBadge but correlates UNKNOWN with the AI analysis result when available.
+ * When cache_state is UNKNOWN and AI has a verdict, shows the AI-inferred state with a
+ * small purple "AI" tag so the source is always transparent.
+ */
+export function EffectiveCacheStateBadge({
+  state,
+  aiAnalysis,
+}: {
+  state: NormalizedCacheState | null;
+  aiAnalysis?: AiCacheAnalysisResult | null;
+}) {
+  if (state !== "UNKNOWN" || !aiAnalysis) {
+    return <CacheStateBadge state={state} />;
+  }
+
+  const inferred: NormalizedCacheState = aiAnalysis.cached ? "HIT" : "MISS";
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Badge label={inferred} variant={CACHE_STATE_VARIANTS[inferred]} />
+      <span
+        className="text-[9px] font-semibold px-1 py-0.5 rounded bg-purple-100 text-purple-600 leading-none"
+        title={`AI-inferred from: ${aiAnalysis.reasoning}`}
+      >
+        AI
+      </span>
+    </span>
+  );
 }
 
 const CDN_COLORS: Record<CdnProvider, string> = {

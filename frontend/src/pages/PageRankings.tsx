@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { pageApi } from "../api/client";
 import type { PageResult, NormalizedCacheState } from "../types";
-import { CacheStateBadge, CdnBadge, StatusBadge } from "../components/ui/Badge";
+import { EffectiveCacheStateBadge, CdnBadge, StatusBadge } from "../components/ui/Badge";
 import { SkeletonTable } from "../components/ui/Skeleton";
 import { EmptyState } from "../components/ui/EmptyState";
 import { formatMs, formatRatio, formatBytes } from "../utils/format";
@@ -58,7 +58,7 @@ function PageRow({ page, scanId, metric }: { page: PageResult; scanId: string; m
         <CdnBadge provider={page.cdn_provider} confidence={page.cdn_confidence} />
       </td>
       <td className="px-4 py-3 text-center">
-        <CacheStateBadge state={page.cache_state} />
+        <EffectiveCacheStateBadge state={page.cache_state} aiAnalysis={page.ai_cache_analysis} />
       </td>
       <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900">
         {metricValue}

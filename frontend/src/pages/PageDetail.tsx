@@ -2,7 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { pageApi } from "../api/client";
 import { Card, MetricCard } from "../components/ui/Card";
-import { CacheStateBadge, CdnBadge, StatusBadge, SeverityBadge } from "../components/ui/Badge";
+import { CacheStateBadge, EffectiveCacheStateBadge, CdnBadge, StatusBadge, SeverityBadge } from "../components/ui/Badge";
 import { SkeletonCard } from "../components/ui/Skeleton";
 import { ErrorState } from "../components/ui/EmptyState";
 import { CacheRatioDonut } from "../components/charts/CacheRatioDonut";
@@ -211,7 +211,7 @@ export default function PageDetail() {
               </span>
             )}
             <CdnBadge provider={page.cdn_provider} confidence={page.cdn_confidence} />
-            <CacheStateBadge state={page.cache_state} />
+            <EffectiveCacheStateBadge state={page.cache_state} aiAnalysis={page.ai_cache_analysis} />
             {page.warm_outcome && (
               <span className="text-xs text-gray-500">
                 Warm: <span className="font-medium">{page.warm_outcome}</span>
@@ -331,7 +331,7 @@ export default function PageDetail() {
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Warmed state</p>
                 <div className="flex items-center gap-2">
-                  <CacheStateBadge state={page.cache_state} />
+                  <EffectiveCacheStateBadge state={page.cache_state} aiAnalysis={page.ai_cache_analysis} />
                   <span className="text-xs text-gray-500">{page.warm_outcome}</span>
                 </div>
               </div>
