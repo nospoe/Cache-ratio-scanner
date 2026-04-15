@@ -6,7 +6,7 @@ import type { Scan } from "../types";
 import { StatusBadge } from "../components/ui/Badge";
 import { SkeletonRow } from "../components/ui/Skeleton";
 import { EmptyState } from "../components/ui/EmptyState";
-import { Plus, ArrowRight, Globe, RotateCcw } from "lucide-react";
+import { Plus, ArrowRight, Globe, RotateCcw, Brain } from "lucide-react";
 import { formatDistanceToNow } from "../utils/format";
 
 function ScanRow({ scan, onRestart }: { scan: Scan; onRestart: (scan: Scan) => void }) {
@@ -68,6 +68,16 @@ function ScanRow({ scan, onRestart }: { scan: Scan; onRestart: (scan: Scan) => v
             {Math.round((aggregate.error_page_count / aggregate.total_pages) * 100)}%
           </span>
         ) : "—"}
+      </td>
+      <td className="px-4 py-3 text-center text-sm">
+        {scan.settings.aiCacheAnalysis ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-medium">
+            <Brain className="w-3 h-3" />
+            {scan.settings.aiModel ?? "gemma3:27b"}
+          </span>
+        ) : (
+          <span className="text-gray-300">—</span>
+        )}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-2">
@@ -168,6 +178,9 @@ export default function ScanList() {
               <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Errors
               </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                AI Analysis
+              </th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -177,7 +190,7 @@ export default function ScanList() {
               : data?.items.length === 0
               ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <EmptyState
                       title="No scans yet"
                       description="Start your first scan to analyze website performance and CDN cache behavior."
