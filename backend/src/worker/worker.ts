@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS: ScanSettings = {
   scanPerformance: true,
   scanCache: true,
   aiCacheAnalysis: false,
+  scanResources: false,
 };
 
 async function processScan(job: Job<ScanJobPayload>): Promise<void> {

@@ -1,4 +1,6 @@
 import axios, { AxiosError } from "axios";
+import http from "http";
+import https from "https";
 import type { ProbeRecord } from "../../types";
 import { validateUrl } from "../../utils/ssrfValidator";
 
@@ -67,20 +69,36 @@ export async function runProbe(url: string, options: ProbeOptions = {}): Promise
   let ttfbTime: number | null = null;
 
   try {
+    // Fresh agent per probe — no TCP keepalive, no connection reuse between cold
+    // and warm probes. Without this, warm probes would reuse the cold probe's
+    // socket and show artificially low latency unrelated to CDN caching.
+    const httpAgent = new http.Agent({ keepAlive: false });
+    const httpsAgent = new https.Agent({ keepAlive: false });
+
     const response = await axios.get(url, {
       timeout: timeoutMs,
       maxRedirects,
       validateStatus: () => true, // accept all status codes
+      httpAgent,
+      httpsAgent,
       headers: {
         "User-Agent": userAgent,
         ...BROWSER_HEADERS,
         ...headers,
       },
       transformResponse: (data: unknown) => data, // don't parse
+      // Capture real TTFB via the underlying socket's response event
+      onDownloadProgress: (progressEvent) => {
+        if (ttfbTime === null && progressEvent.loaded > 0) {
+          ttfbTime = Math.round(performance.now() - startTime);
+        }
+      },
     });
 
     const endTime = performance.now();
     const totalLatency = Math.round(endTime - startTime);
+    // If onDownloadProgress never fired (e.g. empty body), fall back to total
+    if (ttfbTime === null) ttfbTime = totalLatency;
 
     // Parse response headers (normalize to lowercase)
     const responseHeaders: Record<string, string> = {};
@@ -99,9 +117,6 @@ export async function runProbe(url: string, options: ProbeOptions = {}): Promise
 
     const contentLength = responseHeaders["content-length"];
     const content_length = contentLength ? parseInt(contentLength) : null;
-
-    // TTFB approximation (no easy way without TCP hooks in axios, use 30% of total)
-    ttfbTime = Math.round(totalLatency * 0.3);
 
     const finalUrl: string = (response.request as Record<string, unknown>)?.path
       ? url

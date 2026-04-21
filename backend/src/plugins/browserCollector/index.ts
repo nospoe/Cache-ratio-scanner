@@ -34,22 +34,24 @@ export async function runBrowserCollection(
         "--disable-dev-shm-usage",
         "--disable-gpu",
         "--disable-extensions",
+        "--disable-http2", // some sites reject Chromium's HTTP/2 fingerprint
       ],
     });
 
-    const metrics = await collectBrowserMetrics(browser, url, {
+    const { metrics, rawResources } = await collectBrowserMetrics(browser, url, {
       deviceProfile: settings.deviceProfile,
       customViewport: settings.customViewport,
       customUserAgent: settings.customUserAgent,
       timeoutMs: settings.browserTimeoutMs,
+      collectResources: settings.scanResources && settings.mode === "single",
     });
 
     log.debug(
-      { pageId, lcp: metrics.lcp_ms, fcp: metrics.fcp_ms, score: metrics.performance_score },
+      { pageId, lcp: metrics.lcp_ms, fcp: metrics.fcp_ms, score: metrics.performance_score, resourceCount: rawResources.length },
       "Browser collection complete"
     );
 
-    return { ...state, browserMetrics: metrics };
+    return { ...state, browserMetrics: metrics, rawResources: rawResources.length > 0 ? rawResources : undefined };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.warn({ pageId, url, err: msg }, "Browser collection failed");

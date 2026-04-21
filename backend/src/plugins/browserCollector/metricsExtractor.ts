@@ -2,6 +2,23 @@
 import type { BrowserMetrics, WaterfallEntry } from "../../types";
 import type { Browser } from "playwright";
 
+export interface RawResourceData {
+  url: string;
+  resource_type: string;
+  http_status: number;
+  latency_ms: number;
+  response_headers: Record<string, string>;
+  content_type: string | null;
+  content_length: number | null;
+  age_seconds: number | null;
+  is_third_party: boolean;
+}
+
+export interface CollectBrowserMetricsResult {
+  metrics: BrowserMetrics;
+  rawResources: RawResourceData[];
+}
+
 const DESKTOP_VIEWPORT = { width: 1280, height: 800 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 const MOBILE_USER_AGENT =
@@ -12,14 +29,15 @@ export interface BrowserOptions {
   customViewport?: { width: number; height: number };
   customUserAgent?: string;
   timeoutMs?: number;
+  collectResources?: boolean;
 }
 
 export async function collectBrowserMetrics(
   browser: Browser,
   url: string,
   options: BrowserOptions
-): Promise<BrowserMetrics> {
-  const { deviceProfile, customViewport, customUserAgent, timeoutMs = 30000 } = options;
+): Promise<CollectBrowserMetricsResult> {
+  const { deviceProfile, customViewport, customUserAgent, timeoutMs = 30000, collectResources = false } = options;
   const viewport =
     deviceProfile === "mobile"
       ? MOBILE_VIEWPORT
@@ -37,7 +55,11 @@ export async function collectBrowserMetrics(
 
   const page = await context.newPage();
   const waterfall: WaterfallEntry[] = [];
+  const rawResources: RawResourceData[] = [];
   const requestStartTimes = new Map<string, number>();
+
+  let pageOrigin = "";
+  try { pageOrigin = new URL(url).origin; } catch { /* ok */ }
 
   page.on("request", (req) => {
     requestStartTimes.set(req.url(), performance.now());
@@ -55,10 +77,9 @@ export async function collectBrowserMetrics(
       // ignore
     }
 
-    let pageOrigin = "";
-    try { pageOrigin = new URL(url).origin; } catch { /* ok */ }
     let reqOrigin = "";
     try { reqOrigin = new URL(reqUrl).origin; } catch { /* ok */ }
+    const isThirdParty = reqOrigin !== pageOrigin;
 
     waterfall.push({
       url: reqUrl,
@@ -66,10 +87,36 @@ export async function collectBrowserMetrics(
       start_ms: Math.round(start),
       duration_ms: duration,
       size_bytes: size,
-      is_third_party: reqOrigin !== pageOrigin,
+      is_third_party: isThirdParty,
       is_render_blocking: false,
       status_code: resp.status(),
     });
+
+    if (collectResources) {
+      try {
+        const rawHeaders = resp.headers(); // already lowercase key/value Record
+        const contentTypeRaw = rawHeaders["content-type"] ?? null;
+        const contentType = contentTypeRaw ? contentTypeRaw.split(";")[0].trim() : null;
+        const contentLengthRaw = rawHeaders["content-length"];
+        const contentLength = contentLengthRaw ? parseInt(contentLengthRaw) : null;
+        const ageRaw = rawHeaders["age"];
+        const ageSeconds = ageRaw ? parseInt(ageRaw) : null;
+
+        rawResources.push({
+          url: reqUrl,
+          resource_type: resp.request().resourceType(),
+          http_status: resp.status(),
+          latency_ms: duration,
+          response_headers: rawHeaders,
+          content_type: contentType,
+          content_length: isNaN(contentLength as number) ? null : contentLength,
+          age_seconds: isNaN(ageSeconds as number) ? null : ageSeconds,
+          is_third_party: isThirdParty,
+        });
+      } catch {
+        // individual resource collection failure is non-fatal
+      }
+    }
   });
 
   try {
@@ -106,7 +153,40 @@ export async function collectBrowserMetrics(
 
     const navigationStart = performance.now();
 
-    await page.goto(url, { timeout: timeoutMs, waitUntil: "networkidle" });
+    try {
+      await page.goto(url, { timeout: timeoutMs, waitUntil: "load" });
+      // Best-effort wait for network to settle; many sites never reach networkidle
+      // due to websockets / polling — don't fail if it doesn't happen.
+      try {
+        await page.waitForLoadState("networkidle", { timeout: 5000 });
+      } catch {
+        // ignore — proceed with whatever has loaded
+      }
+    } catch (navErr) {
+      // Navigation timed out or failed. If we already have resources from the
+      // response listener, return them with null performance metrics rather than
+      // losing the data entirely.
+      if (collectResources && rawResources.length > 0) {
+        return {
+          metrics: {
+            fcp_ms: null, lcp_ms: null, cls: null, tbt_ms: null,
+            speed_index: null, ttfb_ms: null,
+            fully_loaded_ms: Math.round(performance.now() - navigationStart),
+            dom_content_loaded_ms: null,
+            total_requests: waterfall.length,
+            total_bytes: waterfall.reduce((acc, e) => acc + e.size_bytes, 0),
+            js_bytes: 0, css_bytes: 0, image_bytes: 0, font_bytes: 0,
+            third_party_count: waterfall.filter((e) => e.is_third_party).length,
+            render_blocking_resources: [],
+            waterfall,
+            performance_score: 0,
+            long_tasks_total_ms: 0,
+          },
+          rawResources,
+        };
+      }
+      throw navErr;
+    }
 
     const fullyLoadedMs = Math.round(performance.now() - navigationStart);
 
@@ -177,25 +257,28 @@ export async function collectBrowserMetrics(
     const totalBytes = waterfall.reduce((acc, e) => acc + e.size_bytes, 0);
 
     return {
-      fcp_ms: fcpMs,
-      lcp_ms: lcpMs,
-      cls,
-      tbt_ms: tbtMs,
-      speed_index: speedIndex,
-      ttfb_ms: ttfbMs,
-      fully_loaded_ms: fullyLoadedMs,
-      dom_content_loaded_ms: navTiming ? Math.round(navTiming.domContentLoaded) : null,
-      total_requests: waterfall.length,
-      total_bytes: totalBytes,
-      js_bytes: resourceSummary.jsBytes,
-      css_bytes: resourceSummary.cssBytes,
-      image_bytes: resourceSummary.imageBytes,
-      font_bytes: resourceSummary.fontBytes,
-      third_party_count: waterfall.filter((e) => e.is_third_party).length,
-      render_blocking_resources: renderBlocking,
-      waterfall,
-      performance_score: perfScore,
-      long_tasks_total_ms: customPerf?.longTasksMs ? Math.round(customPerf.longTasksMs) : 0,
+      metrics: {
+        fcp_ms: fcpMs,
+        lcp_ms: lcpMs,
+        cls,
+        tbt_ms: tbtMs,
+        speed_index: speedIndex,
+        ttfb_ms: ttfbMs,
+        fully_loaded_ms: fullyLoadedMs,
+        dom_content_loaded_ms: navTiming ? Math.round(navTiming.domContentLoaded) : null,
+        total_requests: waterfall.length,
+        total_bytes: totalBytes,
+        js_bytes: resourceSummary.jsBytes,
+        css_bytes: resourceSummary.cssBytes,
+        image_bytes: resourceSummary.imageBytes,
+        font_bytes: resourceSummary.fontBytes,
+        third_party_count: waterfall.filter((e) => e.is_third_party).length,
+        render_blocking_resources: renderBlocking,
+        waterfall,
+        performance_score: perfScore,
+        long_tasks_total_ms: customPerf?.longTasksMs ? Math.round(customPerf.longTasksMs) : 0,
+      },
+      rawResources,
     };
   } finally {
     await context.close();

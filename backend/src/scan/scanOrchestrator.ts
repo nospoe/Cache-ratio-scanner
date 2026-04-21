@@ -6,8 +6,10 @@ import { runChallengeDetection } from "../plugins/challengeDetector";
 import { runBrowserCollection } from "../plugins/browserCollector";
 import { generateRecommendations } from "../plugins/recommendationEngine";
 import { runAiCacheAnalysis } from "../plugins/aiCacheAnalyzer";
+import { runResourceCacheAnalysis } from "../plugins/resourceCacheAnalyzer";
 import { createPageResult, updatePageResult, updatePageStatus } from "../db/repositories/pageRepo";
 import { insertCacheEvents } from "../db/repositories/cacheEventRepo";
+import { insertResourceCacheResults } from "../db/repositories/resourceRepo";
 import { childLogger } from "../utils/logger";
 
 const log = childLogger("scanOrchestrator");
@@ -59,15 +61,20 @@ export async function orchestratePage(
       state = { ...state, cacheNormalizer: cacheOutput };
     }
 
-    // Phase 4: Browser performance collection
-    if (settings.scanPerformance) {
+    // Phase 4: Browser performance collection (also required for resource collection)
+    if (settings.scanPerformance || (settings.scanResources && settings.mode === "single")) {
       state = await runBrowserCollection(state);
     }
 
     // Phase 5: Recommendations
     state = generateRecommendations(state);
 
-    // Phase 6: AI cache analysis (optional, runs after all probe data is collected)
+    // Phase 6: Resource cache analysis (single URL + scanResources flag)
+    if (settings.scanResources && settings.mode === "single" && state.rawResources) {
+      state = runResourceCacheAnalysis(state);
+    }
+
+    // Phase 7: AI cache analysis (optional, runs after all probe data is collected)
     if (settings.aiCacheAnalysis) {
       state = await runAiCacheAnalysis(state);
     }
@@ -96,6 +103,16 @@ async function persistPage(state: PageWorkingState): Promise<void> {
         page_result_id: state.pageId,
       }));
       await insertCacheEvents(eventsWithPageId);
+    }
+
+    // Insert resource cache results
+    if (state.resourceCacheResults && state.resourceCacheResults.length > 0) {
+      const withPageId = state.resourceCacheResults.map((r) => ({
+        ...r,
+        page_result_id: state.pageId,
+        scan_id: state.scanId,
+      }));
+      await insertResourceCacheResults(withPageId);
     }
 
     // Insert cold probe as cache event

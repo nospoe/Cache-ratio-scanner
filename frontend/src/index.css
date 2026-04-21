@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+@media print {
+  /* Hide chrome */
+  aside,
+  .no-print { display: none !important; }
+
+  /* Full width — no sidebar gap */
+  main { overflow: visible !important; }
+  body { background: white !important; }
+
+  /* Cards: no shadow, keep border */
+  .card, [class*="shadow"] { box-shadow: none !important; }
+
+  /* Avoid splitting cards across pages */
+  .card, section { break-inside: avoid; }
+
+  /* Ensure text is black for legibility */
+  h1, h2, p, td, th, span { color: inherit !important; }
+
+  /* Expand truncated URLs */
+  .truncate { overflow: visible !important; white-space: normal !important; }
+}
+
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900 font-sans antialiased;

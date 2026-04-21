@@ -7,10 +7,12 @@ export const AkamaiAdapter: CdnAdapter = {
 
   detect(headers: Record<string, string>): boolean {
     const server = getHeader(headers, "server")?.toLowerCase() ?? "";
+    // Check any header whose name starts with "x-akamai-" as a catch-all
+    const hasAkamaiHeader = Object.keys(headers).some((k) =>
+      k.toLowerCase().startsWith("x-akamai-")
+    );
     return (
-      hasHeader(headers, "x-akamai-request-id") ||
-      hasHeader(headers, "x-akamai-transformed") ||
-      hasHeader(headers, "x-akamai-session-info") ||
+      hasAkamaiHeader ||
       hasHeader(headers, "x-check-cacheable") ||
       hasHeader(headers, "x-cache-key") ||
       server.includes("akamaighost") ||
@@ -59,8 +61,13 @@ export const AkamaiAdapter: CdnAdapter = {
 
   extractSignals(headers: Record<string, string>): string[] {
     const signals: string[] = [];
-    const requestId = getHeader(headers, "x-akamai-request-id");
-    if (requestId) signals.push(`x-akamai-request-id: ${requestId.substring(0, 16)}...`);
+    const akamaiHeaders = Object.keys(headers).filter((k) =>
+      k.toLowerCase().startsWith("x-akamai-")
+    );
+    for (const h of akamaiHeaders.slice(0, 3)) {
+      const v = headers[h];
+      signals.push(`${h}: ${v.length > 60 ? v.substring(0, 60) + "…" : v}`);
+    }
     const xCache = getHeader(headers, "x-cache");
     if (xCache) signals.push(`x-cache: ${xCache}`);
     const cacheKey = getHeader(headers, "x-cache-key");
@@ -81,9 +88,16 @@ export const AkamaiAdapter: CdnAdapter = {
   getConfidenceScore(headers: Record<string, string>): number {
     let score = 0;
     if (hasHeader(headers, "x-akamai-request-id")) score += 0.5;
+    if (hasHeader(headers, "x-akamai-edgescape")) score += 0.4;
     if (hasHeader(headers, "x-cache-key")) score += 0.2;
     if (getHeader(headers, "server")?.toLowerCase().includes("akamai")) score += 0.2;
     if (hasHeader(headers, "x-check-cacheable")) score += 0.1;
+    // Any other x-akamai-* header
+    const hasOtherAkamaiHeader = Object.keys(headers).some((k) =>
+      k.toLowerCase().startsWith("x-akamai-") &&
+      !["x-akamai-request-id", "x-akamai-edgescape"].includes(k.toLowerCase())
+    );
+    if (hasOtherAkamaiHeader) score += 0.3;
     return Math.min(score, 1.0);
   },
 };

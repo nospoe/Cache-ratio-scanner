@@ -2,6 +2,7 @@ import axios from "axios";
 import type {
   Scan,
   PageResult,
+  ResourceCacheResult,
   PaginatedResult,
   CreateScanRequest,
   NormalizedCacheState,
@@ -76,6 +77,11 @@ export const pageApi = {
     api
       .get<GlobalRankingsResponse>(`/api/pages/rankings?metric=${metric}&limit=${limit}`)
       .then((r) => r.data),
+};
+
+export const resourceApi = {
+  list: (scanId: string, pageId: string) =>
+    api.get<ResourceCacheResult[]>(`/api/scans/${scanId}/pages/${pageId}/resources`).then((r) => r.data),
 };
 
 export interface GlobalPageResult extends PageResult {

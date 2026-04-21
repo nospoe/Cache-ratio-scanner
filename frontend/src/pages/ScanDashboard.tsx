@@ -327,8 +327,46 @@ export default function ScanDashboard() {
                 : "Off"}
             </p>
           </div>
+          {scan.mode === "single" && (
+            <div>
+              <p className="text-xs text-gray-400">Resource report</p>
+              <p className="font-medium">{scan.settings.scanResources ? "Yes" : "Off"}</p>
+            </div>
+          )}
         </div>
       </Card>
+
+      {/* Resource report hint for single-URL scans */}
+      {scan.mode === "single" && scan.status === "completed" && (
+        <div className={clsx(
+          "rounded-lg border p-4 text-sm flex items-start gap-3",
+          scan.settings.scanResources
+            ? "border-indigo-100 bg-indigo-50/40 text-indigo-800"
+            : "border-gray-200 bg-gray-50 text-gray-500"
+        )}>
+          <div className="flex-1">
+            {scan.settings.scanResources ? (
+              <>
+                <p className="font-medium mb-0.5">Resource Cache Report available</p>
+                <p className="text-xs">
+                  Cache state breakdown for all sub-resources (scripts, images, fonts, etc.) is available on the{" "}
+                  <Link to={`/scans/${id}/pages`} className="underline font-medium">Page Detail</Link>{" "}
+                  view — click into the scanned page to see it.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium mb-0.5">Resource Cache Report not enabled</p>
+                <p className="text-xs">
+                  Re-run this scan with <span className="font-medium">Resource cache report</span> checked to get
+                  a per-resource breakdown of cache states for all scripts, images, fonts, and other sub-resources
+                  loaded by the page.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

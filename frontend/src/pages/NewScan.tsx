@@ -36,6 +36,7 @@ export default function NewScan() {
     scanCache: boolean;
     aiCacheAnalysis: boolean;
     aiModel: AiModel;
+    scanResources: boolean;
     includePattern: string;
     excludePattern: string;
   }>({
@@ -53,6 +54,7 @@ export default function NewScan() {
     scanCache: true,
     aiCacheAnalysis: false,
     aiModel: "gemma3:27b",
+    scanResources: false,
     includePattern: "",
     excludePattern: "",
   });
@@ -245,6 +247,19 @@ export default function NewScan() {
                 Uses AI to reason about cache headers and estimate hit ratio per page
               </p>
             </div>
+          )}
+
+          {mode === "single" && (
+            <label className="flex items-center gap-2 cursor-pointer pl-0.5">
+              <input
+                type="checkbox"
+                checked={settings.scanResources}
+                onChange={(e) => setSettings((s) => ({ ...s, scanResources: e.target.checked }))}
+                className="rounded border-gray-300 text-indigo-600"
+              />
+              <span className="text-sm text-gray-700">Resource cache report</span>
+              <span className="text-xs text-gray-400">(sub-resources: scripts, images, fonts, …)</span>
+            </label>
           )}
         </div>
 

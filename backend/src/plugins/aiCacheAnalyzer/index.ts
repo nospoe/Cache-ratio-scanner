@@ -6,9 +6,11 @@ const log = childLogger("aiCacheAnalyzer");
 const AI_API_BASE_URL = process.env.AI_API_BASE_URL ?? "https://chat.netcentric.biz/api";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
 
-const SYSTEM_PROMPT = `You are an expert HTTP caching analyst. Your job is to examine HTTP response headers and determine whether a response was served from cache.
+const SYSTEM_PROMPT = `You are an expert HTTP caching analyst. Your job is to examine HTTP response headers and timing data to determine whether a response was served from a CDN cache.
 
-Analyze the provided headers and reason step-by-step about the cache state. Consider headers such as:
+Analyze the provided headers and timing, reasoning step-by-step about the cache state. Consider:
+
+Headers:
 - Cache-Control (max-age, no-cache, no-store, s-maxage, public, private)
 - X-Cache, X-Cache-Status, CF-Cache-Status (CDN-specific cache indicators)
 - Age (seconds the object has been in cache; >0 strongly indicates a cache hit)
@@ -18,14 +20,21 @@ Analyze the provided headers and reason step-by-step about the cache state. Cons
 - Via, X-Served-By (proxy/CDN routing signals)
 - Set-Cookie (often prevents caching)
 - Surrogate-Control, Surrogate-Key (CDN override headers)
-- Akamai-specific: x-akamai-request-id, x-check-cacheable, x-cache-key, x-cache (TCP_HIT/TCP_MISS/TCP_EXPIRED_HIT), server: AkamaiGHost or "Akamai Image Manager"
+- Akamai-specific: x-akamai-request-id, x-akamai-edgescape, x-check-cacheable, x-cache-key, x-cache (TCP_HIT/TCP_MISS/TCP_EXPIRED_HIT), server: AkamaiGHost or "Akamai Image Manager"
+
+Timing signals (use these alongside headers — do NOT ignore them):
+- A dramatic latency drop from cold to warmed probe (e.g. >50% reduction) is a strong signal that the CDN is serving from an edge cache on subsequent requests, even if no explicit X-Cache header is present.
+- CDN cache HITs typically have TTFB < 20ms and latency < 50ms. Higher values suggest origin fetches.
+- If warm latency stays close to cold latency despite multiple warming attempts, the CDN is likely not caching the resource.
+- Age header absent on warm probes despite low latency may indicate a CDN edge with no Age header emission (some Akamai configs omit Age).
 
 After reasoning, output ONLY a valid JSON object (no markdown, no extra text) with this exact structure:
 {
-  "cached": <boolean — true if the response was served from cache>,
-  "reasoning": "<concise explanation of what headers led to this conclusion>",
-  "cache_hit_ratio": <float 0.0–1.0 — estimated proportion of requests that would be cache hits based on these headers>,
-  "confidence": <float 0.0–1.0 — how confident you are in this assessment>
+  "cached": <boolean — true if the response was likely served from a CDN cache on warm requests>,
+  "reasoning": "<concise explanation referencing both headers and timing that led to this conclusion>",
+  "cache_hit_ratio": <float 0.0–1.0 — estimated proportion of requests that would be cache hits>,
+  "confidence": <float 0.0–1.0 — how confident you are in this assessment>,
+  "inferred_cdn": "<name of the CDN provider you identify from the headers, e.g. 'Akamai', 'Cloudflare', 'CloudFront', 'Fastly', or null if none detected>"
 }`;
 
 function buildUserMessage(state: PageWorkingState): string {
@@ -33,7 +42,9 @@ function buildUserMessage(state: PageWorkingState): string {
 
   const cold = state.coldProbe;
   if (cold) {
-    lines.push(`Cold probe — HTTP ${cold.status_code}:`);
+    lines.push(
+      `Cold probe — HTTP ${cold.status_code} | latency=${cold.latency_ms}ms | ttfb=${cold.ttfb_ms != null ? Math.round(cold.ttfb_ms) + "ms" : "n/a"}:`
+    );
     for (const [k, v] of Object.entries(cold.response_headers)) {
       lines.push(`  ${k}: ${v}`);
     }
@@ -42,7 +53,9 @@ function buildUserMessage(state: PageWorkingState): string {
 
   const warmed = state.warmedProbe;
   if (warmed) {
-    lines.push(`Warmed probe — HTTP ${warmed.status_code}:`);
+    lines.push(
+      `Warmed probe — HTTP ${warmed.status_code} | latency=${warmed.latency_ms}ms | ttfb=${warmed.ttfb_ms != null ? Math.round(warmed.ttfb_ms) + "ms" : "n/a"}:`
+    );
     for (const [k, v] of Object.entries(warmed.response_headers)) {
       lines.push(`  ${k}: ${v}`);
     }
@@ -83,8 +96,11 @@ function parseAiResponse(text: string): Omit<AiCacheAnalysisResult, "model"> {
   const reasoning = typeof parsed.reasoning === "string" ? parsed.reasoning : String(parsed.reasoning ?? "");
   const cache_hit_ratio = Math.min(1, Math.max(0, Number(parsed.cache_hit_ratio ?? 0)));
   const confidence = Math.min(1, Math.max(0, Number(parsed.confidence ?? 0)));
+  const inferred_cdn = parsed.inferred_cdn != null && parsed.inferred_cdn !== "null"
+    ? String(parsed.inferred_cdn)
+    : null;
 
-  return { cached, reasoning, cache_hit_ratio, confidence };
+  return { cached, reasoning, cache_hit_ratio, confidence, inferred_cdn };
 }
 
 export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageWorkingState> {

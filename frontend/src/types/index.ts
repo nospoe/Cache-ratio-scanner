@@ -31,6 +31,7 @@ export interface ScanSettings {
   scanCache: boolean;
   aiCacheAnalysis: boolean;
   aiModel?: AiModel;
+  scanResources: boolean;
   includePattern?: string;
   excludePattern?: string;
 }
@@ -82,12 +83,31 @@ export interface ScanProgress {
   message?: string;
 }
 
+export interface ResourceCacheResult {
+  id: string;
+  page_result_id: string;
+  scan_id: string;
+  url: string;
+  resource_type: string;
+  http_status: number | null;
+  latency_ms: number | null;
+  response_headers: Record<string, string>;
+  cache_state: NormalizedCacheState | null;
+  cdn_provider: CdnProvider | null;
+  cdn_confidence: CdnConfidence | null;
+  content_type: string | null;
+  content_length: number | null;
+  age_seconds: number | null;
+  is_third_party: boolean;
+}
+
 export interface AiCacheAnalysisResult {
   cached: boolean;
   reasoning: string;
   cache_hit_ratio: number;
   confidence: number;
   model: string;
+  inferred_cdn?: string | null;
 }
 
 export interface Recommendation {

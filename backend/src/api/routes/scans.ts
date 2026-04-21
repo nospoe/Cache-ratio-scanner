@@ -33,6 +33,7 @@ const settingsSchema = z.object({
   scanCache: z.boolean().optional(),
   aiCacheAnalysis: z.boolean().optional(),
   aiModel: z.enum(["gemma4:31b", "gemma3:27b", "gpt-oss:latest"]).optional(),
+  scanResources: z.boolean().optional(),
 });
 
 const createScanSchema = z.object({
@@ -61,6 +62,7 @@ const DEFAULT_SETTINGS: ScanSettings = {
   scanPerformance: true,
   scanCache: true,
   aiCacheAnalysis: false,
+  scanResources: false,
 };
 
 // POST /scans

@@ -33,6 +33,7 @@ export interface ScanSettings {
   scanCache: boolean;
   aiCacheAnalysis: boolean;
   aiModel?: AiModel;
+  scanResources: boolean;
 }
 
 export interface Scan {
@@ -211,6 +212,26 @@ export interface ChallengeDetectorOutput {
   signals: string[];
 }
 
+// ─── Resource cache result ────────────────────────────────────────────────────
+
+export interface ResourceCacheResult {
+  id?: string;
+  page_result_id?: string;
+  scan_id: string;
+  url: string;
+  resource_type: string;
+  http_status: number | null;
+  latency_ms: number | null;
+  response_headers: Record<string, string>;
+  cache_state: NormalizedCacheState | null;
+  cdn_provider: CdnProvider | null;
+  cdn_confidence: CdnConfidence | null;
+  content_type: string | null;
+  content_length: number | null;
+  age_seconds: number | null;
+  is_third_party: boolean;
+}
+
 // ─── AI Cache Analysis ────────────────────────────────────────────────────────
 
 export interface AiCacheAnalysisResult {
@@ -219,6 +240,7 @@ export interface AiCacheAnalysisResult {
   cache_hit_ratio: number; // 0–1
   confidence: number; // 0–1
   model: string;
+  inferred_cdn?: string | null; // CDN provider inferred from headers by AI
 }
 
 // ─── Recommendation ───────────────────────────────────────────────────────────
@@ -291,7 +313,9 @@ export interface PageWorkingState {
   cacheNormalizer?: CacheNormalizerOutput;
   browserMetrics?: BrowserMetrics;
   challengeDetector?: ChallengeDetectorOutput;
+  rawResources?: import("../plugins/browserCollector/metricsExtractor").RawResourceData[];
   aiCacheAnalysis?: AiCacheAnalysisResult;
+  resourceCacheResults?: ResourceCacheResult[];
   recommendations: Recommendation[];
   error?: string;
 }

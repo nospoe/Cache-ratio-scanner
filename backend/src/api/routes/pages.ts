@@ -5,6 +5,7 @@ import {
   getTopPagesByMetric,
 } from "../../db/repositories/pageRepo";
 import { getCacheEvents } from "../../db/repositories/cacheEventRepo";
+import { getResourceCacheResults } from "../../db/repositories/resourceRepo";
 import type { NormalizedCacheState } from "../../types";
 import { childLogger } from "../../utils/logger";
 
@@ -88,6 +89,19 @@ router.get("/:pageId", async (req: Request, res: Response) => {
   } catch (err) {
     log.error({ err, pageId }, "Failed to get page");
     return res.status(500).json({ error: "Failed to get page" });
+  }
+});
+
+// GET /scans/:id/pages/:pageId/resources
+router.get("/:pageId/resources", async (req: Request, res: Response) => {
+  const { pageId } = req.params;
+
+  try {
+    const resources = await getResourceCacheResults(pageId);
+    return res.json(resources);
+  } catch (err) {
+    log.error({ err, pageId }, "Failed to get resource cache results");
+    return res.status(500).json({ error: "Failed to get resource cache results" });
   }
 });
 

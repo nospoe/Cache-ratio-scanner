@@ -103,11 +103,8 @@ export function inferCacheStateFromHeaders(
   // Error statuses
   if (statusCode >= 500) return "ERROR";
 
-  // Cacheable response (has max-age or s-maxage) with no hit signals = MISS
-  if (cc && (cc.includes("max-age=") || cc.includes("s-maxage")) &&
-      !cc.includes("no-store") && !cc.includes("no-cache") && !cc.includes("private")) {
-    return "MISS";
-  }
-
+  // Response is cacheable but we have no CDN hit/miss signals — we genuinely
+  // don't know whether it was served from cache. Return UNKNOWN rather than
+  // inferring MISS; a CDN adapter (if matched) would give a more precise answer.
   return "UNKNOWN";
 }

@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { pageApi } from "../api/client";
+import { useState } from "react";
+import { pageApi, resourceApi } from "../api/client";
 import { Card, MetricCard } from "../components/ui/Card";
 import { CacheStateBadge, EffectiveCacheStateBadge, CdnBadge, StatusBadge, SeverityBadge } from "../components/ui/Badge";
 import { SkeletonCard } from "../components/ui/Skeleton";
@@ -10,8 +11,8 @@ import {
   formatMs, formatBytes, formatRatio, formatDate,
   lcpTrend, ttfbTrend, clsTrend, tbtTrend,
 } from "../utils/format";
-import { ChevronLeft, AlertTriangle, CheckCircle, Info } from "lucide-react";
-import type { CacheEvent, Recommendation, AiCacheAnalysisResult } from "../types";
+import { ChevronLeft, AlertTriangle, CheckCircle, Info, Printer } from "lucide-react";
+import type { CacheEvent, Recommendation, AiCacheAnalysisResult, ResourceCacheResult, NormalizedCacheState } from "../types";
 import clsx from "clsx";
 
 function CacheEventsTable({ events }: { events: CacheEvent[] }) {
@@ -66,6 +67,93 @@ function CacheEventsTable({ events }: { events: CacheEvent[] }) {
   );
 }
 
+const RESOURCE_TYPE_ORDER = ["document", "script", "stylesheet", "font", "image", "xhr", "fetch", "media", "other"];
+
+function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] }) {
+  const byType = RESOURCE_TYPE_ORDER.reduce<Record<string, ResourceCacheResult[]>>((acc, t) => {
+    const group = resources.filter((r) => r.resource_type === t);
+    if (group.length > 0) acc[t] = group;
+    return acc;
+  }, {});
+  // catch any unlisted types
+  resources.forEach((r) => {
+    if (!RESOURCE_TYPE_ORDER.includes(r.resource_type)) {
+      if (!byType[r.resource_type]) byType[r.resource_type] = [];
+      byType[r.resource_type].push(r);
+    }
+  });
+
+  const hitCount = resources.filter((r) => r.cache_state === "HIT").length;
+  const hitRatio = resources.length > 0 ? hitCount / resources.length : 0;
+
+  return (
+    <Card padding="none">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+        <h2 className="font-semibold text-gray-900">Resource Cache Report</h2>
+        <span className="text-xs text-gray-400">{resources.length} resources</span>
+        <span className="ml-auto text-sm font-semibold text-gray-700">
+          Hit ratio: {Math.round(hitRatio * 100)}%
+        </span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {Object.entries(byType).map(([type, items]) => (
+          <div key={type}>
+            <div className="px-6 py-2 bg-gray-50 flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{type}</span>
+              <span className="text-xs text-gray-400">{items.length}</span>
+              <span className="ml-auto text-xs text-gray-400">
+                {items.filter((r) => r.cache_state === "HIT").length} HITs
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-gray-50">
+                  {items.map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 max-w-xs">
+                        <span className={clsx(
+                          "block truncate font-mono",
+                          r.is_third_party ? "text-orange-600" : "text-gray-700"
+                        )} title={r.url}>
+                          {r.url.replace(/^https?:\/\/[^/]+/, "") || r.url}
+                        </span>
+                        {r.is_third_party && (
+                          <span className="text-[10px] text-orange-400">3rd party</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <EffectiveCacheStateBadge
+                          state={r.cache_state as NormalizedCacheState | null}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
+                        {r.http_status ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
+                        {r.latency_ms != null ? `${r.latency_ms}ms` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">
+                        {r.age_seconds != null ? `age ${r.age_seconds}s` : ""}
+                      </td>
+                      <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">
+                        {r.content_length != null
+                          ? r.content_length > 1024
+                            ? `${Math.round(r.content_length / 1024)}KB`
+                            : `${r.content_length}B`
+                          : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
   const hitPct = Math.round(result.cache_hit_ratio * 100);
   const confPct = Math.round(result.confidence * 100);
@@ -85,14 +173,14 @@ function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
         </span>
       </div>
       <div className="p-6 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <p className="text-xs font-medium text-gray-500 mb-1">AI-estimated cache hit ratio</p>
             <p className="text-2xl font-bold text-gray-900">{hitPct}%</p>
           </div>
           <div>
             <p className="text-xs font-medium text-gray-500 mb-1">Analysis confidence</p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mt-1">
               <div className="flex-1 bg-gray-100 rounded-full h-2">
                 <div
                   className={clsx(
@@ -104,6 +192,14 @@ function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
               </div>
               <span className="text-sm font-medium text-gray-700">{confPct}%</span>
             </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-1">Inferred CDN</p>
+            {result.inferred_cdn ? (
+              <span className="text-sm font-semibold text-gray-800">{result.inferred_cdn}</span>
+            ) : (
+              <span className="text-sm text-gray-400">None detected</span>
+            )}
           </div>
         </div>
         <div>
@@ -160,6 +256,66 @@ function HeaderTable({ headers }: { headers: Record<string, string> }) {
   );
 }
 
+function ResponseHeadersCard({
+  cold,
+  warmed,
+}: {
+  cold: import("../types").ProbeRecord | null;
+  warmed: import("../types").ProbeRecord | null;
+}) {
+  const [tab, setTab] = useState<"cold" | "warm">("cold");
+  const tabs = [
+    { id: "cold" as const, label: "Cold probe", probe: cold },
+    { id: "warm" as const, label: "Warm probe", probe: warmed },
+  ].filter((t) => t.probe);
+
+  const active = tabs.find((t) => t.id === tab) ?? tabs[0];
+  if (!active) return null;
+
+  return (
+    <Card padding="none">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-4">
+        <h2 className="font-semibold text-gray-900">Response Headers</h2>
+        <div className="flex gap-1 ml-auto">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={clsx(
+                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
+                tab === t.id
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+              )}
+            >
+              {t.label}
+              {t.probe?.status_code && (
+                <span className="ml-1.5 opacity-60">{t.probe.status_code}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Timing summary for the active probe */}
+      {active.probe && (
+        <div className="px-6 py-3 border-b border-gray-50 bg-gray-50 flex flex-wrap gap-6 text-xs text-gray-500">
+          <span>TTFB <strong className="text-gray-800">{active.probe.ttfb_ms != null ? `${Math.round(active.probe.ttfb_ms)}ms` : "—"}</strong></span>
+          <span>Latency <strong className="text-gray-800">{active.probe.latency_ms != null ? `${active.probe.latency_ms}ms` : "—"}</strong></span>
+          {active.probe.age_seconds != null && (
+            <span>Age <strong className="text-gray-800">{active.probe.age_seconds}s</strong></span>
+          )}
+          {active.probe.final_url && active.probe.final_url !== active.probe.url && (
+            <span className="truncate max-w-xs">→ <strong className="text-gray-800">{active.probe.final_url}</strong></span>
+          )}
+        </div>
+      )}
+      <div className="p-6">
+        <HeaderTable headers={active.probe?.response_headers ?? {}} />
+      </div>
+    </Card>
+  );
+}
+
 export default function PageDetail() {
   const { id: scanId, pageId } = useParams<{ id: string; pageId: string }>();
 
@@ -167,6 +323,12 @@ export default function PageDetail() {
     queryKey: ["page", scanId, pageId],
     queryFn: () => pageApi.get(scanId!, pageId!),
     enabled: !!scanId && !!pageId,
+  });
+
+  const { data: resources } = useQuery({
+    queryKey: ["page-resources", scanId, pageId],
+    queryFn: () => resourceApi.list(scanId!, pageId!),
+    enabled: !!scanId && !!pageId && page?.status === "completed",
   });
 
   if (isLoading) {
@@ -193,13 +355,20 @@ export default function PageDetail() {
     <div className="px-6 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <Link to={`/scans/${scanId}/pages`} className="text-gray-400 hover:text-gray-600 mt-1">
+        <Link to={`/scans/${scanId}/pages`} className="text-gray-400 hover:text-gray-600 mt-1 no-print">
           <ChevronLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
           <h1 className="text-lg font-bold text-gray-900 break-all">{page.original_url}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <StatusBadge status={page.status} />
+            <button
+              onClick={() => window.print()}
+              className="no-print ml-auto btn-secondary text-xs"
+              title="Export as PDF"
+            >
+              <Printer className="w-3.5 h-3.5" /> Export PDF
+            </button>
             {page.http_status && (
               <span className={clsx(
                 "text-xs font-mono px-2 py-0.5 rounded-full font-medium",
@@ -381,20 +550,20 @@ export default function PageDetail() {
         </div>
       </Card>
 
+      {/* Resource cache report */}
+      {resources && resources.length > 0 && (
+        <ResourceCacheTable resources={resources} />
+      )}
+
       {/* AI cache analysis */}
       {page.ai_cache_analysis && (
         <AiCacheAnalysisCard result={page.ai_cache_analysis} />
       )}
 
-      {/* Response headers */}
-      <Card padding="none">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Response Headers</h2>
-        </div>
-        <div className="p-6">
-          <HeaderTable headers={page.raw_response_headers} />
-        </div>
-      </Card>
+      {/* Response headers — cold + warm tabs */}
+      {(page.cold_http || page.warmed_http) && (
+        <ResponseHeadersCard cold={page.cold_http} warmed={page.warmed_http} />
+      )}
 
       {/* Challenge/block */}
       {(page.is_challenged || page.is_blocked) && (
