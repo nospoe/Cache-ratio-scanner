@@ -80,6 +80,7 @@ docker compose down
 | AI cache analysis | Off | Use an LLM to reason about headers and estimate cache hit ratio |
 | AI provider | Custom | **Custom** (Ollama / any OpenAI-compatible server) or **OpenAI** (direct ChatGPT integration) |
 | AI model | — | Fetched live from the selected provider; falls back to a default list if unreachable |
+| Debug headers | Off | Inject CDN diagnostic request headers (Single URL only) — surfaces hidden cache metadata in response headers |
 
 ---
 
@@ -109,6 +110,7 @@ The full breakdown for a single page:
 - Render-blocking resources
 - CDN detection signals and confidence score
 - Cache state timeline (every probe request with its cache state, age header, and latency)
+- Response headers for cold and warm probes (tabbed view)
 - Warm outcome: what happened after the cache warming cycle
 - AI cache analysis (when enabled): LLM reasoning, estimated hit ratio, confidence score, and AI-inferred CDN provider
 - Recommendations with evidence
@@ -208,6 +210,43 @@ When AI analysis was enabled the **Scan Dashboard** shows a summary card with:
 4. Set the relevant environment variables in `.env` (see below)
 
 **Failures are non-fatal.** Network errors, HTTP errors, timeouts, and JSON parse failures are logged and skipped — the scan continues and the AI result for that page is simply absent. Set `LOG_LEVEL=debug` to see the full request payload and raw model response in worker logs.
+
+---
+
+## Debug Headers
+
+Debug headers is an **optional, Single URL only** feature that injects diagnostic request headers into every probe — both HTTP requests and the Playwright browser pass. CDNs that support these headers echo back additional cache metadata in their responses, making it possible to see cache keys, TTLs, and cacheability verdicts that are normally invisible.
+
+### Available presets
+
+#### Akamai — Pragma directives
+
+Akamai reads specific values from the `Pragma` request header and echoes diagnostic data back in the response. Multiple directives are comma-joined into a single `Pragma` header.
+
+| Directive | Response header returned |
+|---|---|
+| `akamai-x-cache-on` | `X-Cache` — cache state (TCP_HIT, TCP_MISS, etc.) |
+| `akamai-x-get-cache-key` | `X-Cache-Key` — the cache key used for this object |
+| `akamai-x-get-true-cache-key` | `X-True-Cache-Key` — the cache key after Vary stripping |
+| `akamai-x-check-cacheable` | `X-Check-Cacheable` — whether the object is cacheable (`yes`/`no`) |
+| `akamai-x-get-request-id` | `X-Akamai-Request-Id` — unique request identifier for log correlation |
+
+#### Fastly
+
+| Header sent | Response headers returned |
+|---|---|
+| `Fastly-Debug: 1` | `Fastly-Debug-TTL`, `Fastly-Debug-State`, `Fastly-Debug-Digest` |
+
+### How it works
+
+When debug headers are enabled, the selected headers are sent on:
+- The cold probe HTTP request
+- Every warm-up HTTP request
+- The Playwright browser navigation (injected via `page.setExtraHTTPHeaders()`, so they also apply to all sub-resource fetches)
+
+The response headers returned by the CDN appear in the **Response Headers** card (cold and warm tabs) on the Page Detail view.
+
+> **Note:** These headers only have effect if the target site is actually served by the respective CDN and the CDN is configured to honour debug pragma requests. They are harmless on other CDNs or origins.
 
 ---
 

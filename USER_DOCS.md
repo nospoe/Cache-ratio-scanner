@@ -89,6 +89,8 @@ Before starting a scan you can enable or disable the following analysis types:
 | Performance metrics (browser) | On | Collect LCP, FCP, CLS, TBT, TTFB, and resource breakdown via Playwright |
 | CDN cache analysis | On | Probe cache behaviour using HTTP requests and CDN header adapters |
 | AI cache analysis | Off | Use an LLM to reason about response headers and estimate cache hit ratio |
+| Resource cache report | Off | Per-resource cache breakdown for all sub-resources (Single URL only) |
+| Debug headers | Off | Inject CDN diagnostic request headers to surface hidden cache metadata (Single URL only) |
 
 When **AI cache analysis** is enabled, a provider toggle and model selector appear:
 
@@ -206,6 +208,48 @@ This is based on real observed cache behavior — not inferred from Cache-Contro
 
 ---
 
+## Debug Headers
+
+Debug headers is an **optional, Single URL only** feature that injects diagnostic request headers into every HTTP probe and the Playwright browser pass. CDNs that support these headers return additional cache metadata in the response — cache keys, TTLs, cacheability verdicts — that are not normally visible in a standard request.
+
+The debug response headers appear in the **Response Headers** card on the Page Detail view (cold and warm tabs).
+
+### Enabling debug headers
+
+1. Select **Single URL** scan mode
+2. Tick **Debug headers**
+3. Select one or more directives from the Akamai or Fastly sections
+4. A live preview shows the exact headers that will be sent before you start the scan
+
+### Akamai Pragma directives
+
+Each directive is a value added to the `Pragma` request header. Multiple selections are comma-joined into a single header: `Pragma: akamai-x-cache-on, akamai-x-get-cache-key`.
+
+| Directive | What it returns |
+|-----------|-----------------|
+| `akamai-x-cache-on` | `X-Cache` — cache state (TCP_HIT, TCP_MISS, TCP_EXPIRED_HIT, etc.) |
+| `akamai-x-get-cache-key` | `X-Cache-Key` — the cache key used for this object |
+| `akamai-x-get-true-cache-key` | `X-True-Cache-Key` — the cache key after Vary header stripping |
+| `akamai-x-check-cacheable` | `X-Check-Cacheable` — whether Akamai considers the object cacheable (`yes` / `no`) |
+| `akamai-x-get-request-id` | `X-Akamai-Request-Id` — unique identifier for log correlation with Akamai support |
+
+### Fastly
+
+| Header sent | What it returns |
+|-------------|-----------------|
+| `Fastly-Debug: 1` | `Fastly-Debug-TTL` (remaining TTL), `Fastly-Debug-State` (cache state), `Fastly-Debug-Digest` (cache object hash) |
+
+### Scope
+
+Debug headers are sent on:
+- Cold probe HTTP request
+- Every warm-up HTTP request
+- Playwright browser navigation — injected via `page.setExtraHTTPHeaders()`, so they apply to the main document and all sub-resource fetches
+
+> These headers only have effect if the target is actually served by the respective CDN. They are harmless on other CDNs or origins.
+
+---
+
 ## CDN Detection
 
 Site Scanner automatically identifies the CDN serving each page using response headers:
@@ -270,7 +314,11 @@ Content-Type: application/json
     "scanCache": true,
     "aiCacheAnalysis": false,
     "aiProvider": "custom",    // "custom" | "openai"
-    "aiModel": "gemma3:27b"
+    "aiModel": "gemma3:27b",
+    "debugHeaders": {          // optional — single mode only
+      "pragma": "akamai-x-cache-on, akamai-x-get-cache-key",
+      "fastly-debug": "1"
+    }
   }
 }
 
@@ -415,3 +463,8 @@ WORKER_REPLICAS=2 docker-compose up --scale worker=2
 - The API server cannot reach the AI provider's `/models` endpoint at scan creation time.
 - For OpenAI: check your `OPENAI_API_KEY` is valid and has not expired.
 - For custom provider: check `AI_API_BASE_URL` is reachable from the API container. You can still select a model from the fallback list and proceed.
+
+**Debug headers selected but no extra headers visible in the response**
+- The target site may not be served by the CDN that corresponds to the selected directives (e.g. Akamai Pragma has no effect on a Cloudflare-served site).
+- Some Akamai configurations disable debug pragma responses for security reasons. Contact your Akamai account team to enable them.
+- Verify the headers were actually sent by checking the **Response Headers → Cold probe** tab — the request headers are shown above the response headers in the timing bar.

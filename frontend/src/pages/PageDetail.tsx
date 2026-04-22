@@ -11,7 +11,7 @@ import {
   formatMs, formatBytes, formatRatio, formatDate,
   lcpTrend, ttfbTrend, clsTrend, tbtTrend,
 } from "../utils/format";
-import { ChevronLeft, AlertTriangle, CheckCircle, Info, Printer } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Printer } from "lucide-react";
 import type { CacheEvent, Recommendation, AiCacheAnalysisResult, ResourceCacheResult, NormalizedCacheState } from "../types";
 import clsx from "clsx";
 
@@ -70,12 +70,13 @@ function CacheEventsTable({ events }: { events: CacheEvent[] }) {
 const RESOURCE_TYPE_ORDER = ["document", "script", "stylesheet", "font", "image", "xhr", "fetch", "media", "other"];
 
 function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] }) {
+  const [open, setOpen] = useState(true);
+
   const byType = RESOURCE_TYPE_ORDER.reduce<Record<string, ResourceCacheResult[]>>((acc, t) => {
     const group = resources.filter((r) => r.resource_type === t);
     if (group.length > 0) acc[t] = group;
     return acc;
   }, {});
-  // catch any unlisted types
   resources.forEach((r) => {
     if (!RESOURCE_TYPE_ORDER.includes(r.resource_type)) {
       if (!byType[r.resource_type]) byType[r.resource_type] = [];
@@ -88,68 +89,100 @@ function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] })
 
   return (
     <Card padding="none">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-6 py-4 border-b border-gray-100 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
+      >
         <h2 className="font-semibold text-gray-900">Resource Cache Report</h2>
         <span className="text-xs text-gray-400">{resources.length} resources</span>
-        <span className="ml-auto text-sm font-semibold text-gray-700">
+        <span className="ml-auto text-sm font-semibold text-gray-700 mr-2">
           Hit ratio: {Math.round(hitRatio * 100)}%
         </span>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {Object.entries(byType).map(([type, items]) => (
-          <div key={type}>
-            <div className="px-6 py-2 bg-gray-50 flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{type}</span>
-              <span className="text-xs text-gray-400">{items.length}</span>
-              <span className="ml-auto text-xs text-gray-400">
-                {items.filter((r) => r.cache_state === "HIT").length} HITs
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <tbody className="divide-y divide-gray-50">
-                  {items.map((r, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 max-w-xs">
-                        <span className={clsx(
-                          "block truncate font-mono",
-                          r.is_third_party ? "text-orange-600" : "text-gray-700"
-                        )} title={r.url}>
-                          {r.url.replace(/^https?:\/\/[^/]+/, "") || r.url}
-                        </span>
-                        {r.is_third_party && (
-                          <span className="text-[10px] text-orange-400">3rd party</span>
-                        )}
+        {open
+          ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs table-fixed">
+            <colgroup>
+              <col /> {/* URL — takes remaining width */}
+              <col style={{ width: "90px" }} />  {/* State */}
+              <col style={{ width: "56px" }} />  {/* Status */}
+              <col style={{ width: "72px" }} />  {/* Latency */}
+              <col style={{ width: "96px" }} />  {/* Age */}
+              <col style={{ width: "64px" }} />  {/* Size */}
+            </colgroup>
+            <thead className="bg-gray-50 border-b border-gray-100 sticky top-0">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500">URL</th>
+                <th className="px-2 py-2 text-center text-xs font-semibold text-gray-500">State</th>
+                <th className="px-2 py-2 text-center text-xs font-semibold text-gray-500">HTTP</th>
+                <th className="px-2 py-2 text-center text-xs font-semibold text-gray-500">Latency</th>
+                <th className="px-2 py-2 text-center text-xs font-semibold text-gray-500">Age</th>
+                <th className="px-2 py-2 text-right text-xs font-semibold text-gray-500">Size</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {Object.entries(byType).map(([type, items]) => {
+                const typeHits = items.filter((r) => r.cache_state === "HIT").length;
+                return (
+                  <>
+                    <tr key={`group-${type}`} className="bg-gray-50">
+                      <td colSpan={4} className="px-4 py-1.5">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{type}</span>
+                        <span className="text-xs text-gray-400 ml-2">{items.length}</span>
                       </td>
-                      <td className="px-3 py-2 text-center whitespace-nowrap">
-                        <EffectiveCacheStateBadge
-                          state={r.cache_state as NormalizedCacheState | null}
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
-                        {r.http_status ?? "—"}
-                      </td>
-                      <td className="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
-                        {r.latency_ms != null ? `${r.latency_ms}ms` : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">
-                        {r.age_seconds != null ? `age ${r.age_seconds}s` : ""}
-                      </td>
-                      <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">
-                        {r.content_length != null
-                          ? r.content_length > 1024
-                            ? `${Math.round(r.content_length / 1024)}KB`
-                            : `${r.content_length}B`
-                          : ""}
+                      <td colSpan={2} className="px-2 py-1.5 text-right text-xs text-gray-400">
+                        {typeHits} HITs
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
-      </div>
+                    {items.map((r, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-4 py-1.5">
+                          <span
+                            className={clsx(
+                              "block truncate font-mono",
+                              r.is_third_party ? "text-orange-600" : "text-gray-700"
+                            )}
+                            title={r.url}
+                          >
+                            {r.url.replace(/^https?:\/\/[^/]+/, "") || r.url}
+                          </span>
+                          {r.is_third_party && (
+                            <span className="text-[10px] text-orange-400">3rd party</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <EffectiveCacheStateBadge state={r.cache_state as NormalizedCacheState | null} />
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-gray-500 tabular-nums">
+                          {r.http_status ?? "—"}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-gray-500 tabular-nums">
+                          {r.latency_ms != null ? `${r.latency_ms}ms` : "—"}
+                        </td>
+                        <td className="px-2 py-1.5 text-center text-gray-400 tabular-nums">
+                          {r.age_seconds != null ? `${r.age_seconds}s` : "—"}
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-gray-400 tabular-nums">
+                          {r.content_length != null
+                            ? r.content_length >= 1024
+                              ? `${Math.round(r.content_length / 1024)}KB`
+                              : `${r.content_length}B`
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }
