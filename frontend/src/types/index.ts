@@ -1,5 +1,6 @@
 export type ScanMode = "single" | "list" | "sitemap" | "crawl";
-export type AiModel = "gemma4:31b" | "gemma3:27b" | "gpt-oss:latest";
+export type AiModel = string;
+export type AiProvider = "openai" | "custom";
 export type ScanStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type CdnProvider = "cloudflare" | "cloudfront" | "fastly" | "akamai" | "unknown";
 export type CdnConfidence = "high" | "medium" | "low" | "none";
@@ -30,8 +31,10 @@ export interface ScanSettings {
   scanPerformance: boolean;
   scanCache: boolean;
   aiCacheAnalysis: boolean;
+  aiProvider?: AiProvider;
   aiModel?: AiModel;
   scanResources: boolean;
+  debugHeaders?: Record<string, string>;
   includePattern?: string;
   excludePattern?: string;
 }

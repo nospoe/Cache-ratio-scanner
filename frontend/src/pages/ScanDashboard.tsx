@@ -323,7 +323,7 @@ export default function ScanDashboard() {
             <p className="text-xs text-gray-400">AI analysis</p>
             <p className="font-medium">
               {scan.settings.aiCacheAnalysis
-                ? (scan.settings.aiModel ?? "gemma3:27b")
+                ? `${scan.settings.aiProvider === "openai" ? "OpenAI / " : ""}${scan.settings.aiModel ?? "—"}`
                 : "Off"}
             </p>
           </div>
@@ -331,6 +331,14 @@ export default function ScanDashboard() {
             <div>
               <p className="text-xs text-gray-400">Resource report</p>
               <p className="font-medium">{scan.settings.scanResources ? "Yes" : "Off"}</p>
+            </div>
+          )}
+          {scan.mode === "single" && scan.settings.debugHeaders && Object.keys(scan.settings.debugHeaders).length > 0 && (
+            <div className="col-span-2">
+              <p className="text-xs text-gray-400">Debug headers</p>
+              <p className="font-mono text-xs text-orange-700 break-all">
+                {Object.entries(scan.settings.debugHeaders).map(([k, v]) => `${k}: ${v}`).join(" · ")}
+              </p>
             </div>
           )}
         </div>

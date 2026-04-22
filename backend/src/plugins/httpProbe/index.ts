@@ -17,7 +17,7 @@ export async function runHttpProbePhase(
   const coldProbe = await runProbe(url, {
     timeoutMs: settings.requestTimeoutMs,
     maxRedirects: settings.maxRedirects,
-    headers: settings.headers,
+    headers: { ...settings.headers, ...settings.debugHeaders },
     validateSsrf: process.env.SSRF_PROTECTION !== "false",
     ...probeOptions,
   });
@@ -44,7 +44,7 @@ export async function runHttpProbePhase(
       probeOptions: {
         timeoutMs: settings.requestTimeoutMs,
         maxRedirects: settings.maxRedirects,
-        headers: settings.headers,
+        headers: { ...settings.headers, ...settings.debugHeaders },
         validateSsrf: process.env.SSRF_PROTECTION !== "false",
         ...probeOptions,
       },

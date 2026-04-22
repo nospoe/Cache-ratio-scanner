@@ -6,6 +6,7 @@ import scansRouter from "./routes/scans";
 import pagesRouter from "./routes/pages";
 import exportsRouter from "./routes/exports";
 import globalRankingsRouter from "./routes/globalRankings";
+import aiRouter from "./routes/ai";
 import { childLogger } from "../utils/logger";
 
 const log = childLogger("api.server");
@@ -35,6 +36,7 @@ app.use("/api/scans", scansRouter);
 app.use("/api/scans/:id/pages", pagesRouter);
 app.use("/api/scans/:id", exportsRouter);
 app.use("/api/pages", globalRankingsRouter);
+app.use("/api/ai", aiRouter);
 
 // 404
 app.use((_req, res) => {

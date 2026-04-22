@@ -32,8 +32,10 @@ const settingsSchema = z.object({
   scanPerformance: z.boolean().optional(),
   scanCache: z.boolean().optional(),
   aiCacheAnalysis: z.boolean().optional(),
-  aiModel: z.enum(["gemma4:31b", "gemma3:27b", "gpt-oss:latest"]).optional(),
+  aiProvider: z.enum(["openai", "custom"]).optional(),
+  aiModel: z.string().max(100).optional(),
   scanResources: z.boolean().optional(),
+  debugHeaders: z.record(z.string().max(1000)).optional(),
 });
 
 const createScanSchema = z.object({

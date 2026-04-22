@@ -3,8 +3,13 @@ import { childLogger } from "../../utils/logger";
 
 const log = childLogger("aiCacheAnalyzer");
 
-const AI_API_BASE_URL = process.env.AI_API_BASE_URL ?? "https://chat.netcentric.biz/api";
+const CUSTOM_AI_BASE_URL = process.env.AI_API_BASE_URL ?? "https://chat.netcentric.biz/api";
+const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
+
+function getBaseUrl(provider?: string): string {
+  return provider === "openai" ? OPENAI_BASE_URL : CUSTOM_AI_BASE_URL;
+}
 
 const SYSTEM_PROMPT = `You are an expert HTTP caching analyst. Your job is to examine HTTP response headers and timing data to determine whether a response was served from a CDN cache.
 
@@ -104,22 +109,26 @@ function parseAiResponse(text: string): Omit<AiCacheAnalysisResult, "model"> {
 }
 
 export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageWorkingState> {
-  const model = state.settings.aiModel ?? "gemma3:27b";
-  const endpoint = `${AI_API_BASE_URL}/chat/completions`;
+  const model = state.settings.aiModel ?? "gpt-4o-mini";
+  const endpoint = `${getBaseUrl(state.settings.aiProvider)}/chat/completions`;
 
   log.info({ pageId: state.pageId, url: state.url, model, endpoint }, "Starting AI cache analysis");
 
   const userMessage = buildUserMessage(state);
 
-  const requestBody = {
+  const requestBody: Record<string, unknown> = {
     model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userMessage },
     ],
-    temperature: 0.1,
-    max_tokens: 512,
   };
+  // Reasoning models (o1, o3, gpt-5, …) only accept the default temperature.
+  // For non-OpenAI (Ollama-compatible), cap tokens and set low temperature.
+  if (state.settings.aiProvider !== "openai") {
+    requestBody.temperature = 0.1;
+    requestBody.max_tokens = 1024;
+  }
 
   log.debug(
     {

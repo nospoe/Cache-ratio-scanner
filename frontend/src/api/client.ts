@@ -84,6 +84,13 @@ export const resourceApi = {
     api.get<ResourceCacheResult[]>(`/api/scans/${scanId}/pages/${pageId}/resources`).then((r) => r.data),
 };
 
+export const aiApi = {
+  models: (provider: "openai" | "custom") =>
+    api.get<{ provider: string; models: string[]; fallback?: boolean }>(
+      `/api/ai/models?provider=${provider}`
+    ).then((r) => r.data),
+};
+
 export interface GlobalPageResult extends PageResult {
   scan_root_input: string;
   scan_created_at: string;

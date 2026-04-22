@@ -5,7 +5,8 @@ export type ScanStatus = "queued" | "running" | "completed" | "failed" | "cancel
 export type DeviceProfile = "desktop" | "mobile" | "custom";
 export type InputType = "single_url" | "url_list" | "sitemap" | "crawl" | "csv";
 
-export type AiModel = "gemma4:31b" | "gemma3:27b" | "gpt-oss:latest";
+export type AiModel = string; // free-form — resolved dynamically from provider
+export type AiProvider = "openai" | "custom";
 
 export interface ScanSettings {
   mode: ScanMode;
@@ -32,8 +33,10 @@ export interface ScanSettings {
   scanPerformance: boolean;
   scanCache: boolean;
   aiCacheAnalysis: boolean;
+  aiProvider?: AiProvider;
   aiModel?: AiModel;
   scanResources: boolean;
+  debugHeaders?: Record<string, string>;
 }
 
 export interface Scan {

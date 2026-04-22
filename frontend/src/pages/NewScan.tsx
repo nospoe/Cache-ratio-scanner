@@ -1,12 +1,27 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
-import { scanApi } from "../api/client";
-import type { ScanMode, AiModel, CreateScanRequest } from "../types";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { scanApi, aiApi } from "../api/client";
+import type { ScanMode, AiProvider, CreateScanRequest } from "../types";
 import { ChevronDown, ChevronUp, Globe, List, Map, Search } from "lucide-react";
 import clsx from "clsx";
 
 type Tab = ScanMode;
+
+const AKAMAI_PRAGMA_OPTIONS: { id: string; label: string; description: string }[] = [
+  { id: "akamai-x-cache-on", label: "akamai-x-cache-on", description: "Returns X-Cache in response" },
+  { id: "akamai-x-get-cache-key", label: "akamai-x-get-cache-key", description: "Returns X-Cache-Key" },
+  { id: "akamai-x-get-true-cache-key", label: "akamai-x-get-true-cache-key", description: "Returns X-True-Cache-Key" },
+  { id: "akamai-x-check-cacheable", label: "akamai-x-check-cacheable", description: "Returns X-Check-Cacheable" },
+  { id: "akamai-x-get-request-id", label: "akamai-x-get-request-id", description: "Returns X-Akamai-Request-Id" },
+];
+
+function buildDebugHeaders(selectedPragmas: string[], fastlyDebug: boolean): Record<string, string> | undefined {
+  const headers: Record<string, string> = {};
+  if (selectedPragmas.length > 0) headers["pragma"] = selectedPragmas.join(", ");
+  if (fastlyDebug) headers["fastly-debug"] = "1";
+  return Object.keys(headers).length > 0 ? headers : undefined;
+}
 
 const TABS: { id: Tab; label: string; icon: typeof Globe; description: string }[] = [
   { id: "single", icon: Globe, label: "Single URL", description: "Scan one URL" },
@@ -21,6 +36,8 @@ export default function NewScan() {
   const [rootInput, setRootInput] = useState("");
   const [urlList, setUrlList] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedPragmas, setSelectedPragmas] = useState<string[]>([]);
+  const [fastlyDebug, setFastlyDebug] = useState(false);
   const [settings, setSettings] = useState<{
     deviceProfile: "desktop" | "mobile" | "custom";
     maxPages: number;
@@ -35,8 +52,10 @@ export default function NewScan() {
     scanPerformance: boolean;
     scanCache: boolean;
     aiCacheAnalysis: boolean;
-    aiModel: AiModel;
+    aiProvider: AiProvider;
+    aiModel: string;
     scanResources: boolean;
+    enableDebugHeaders: boolean;
     includePattern: string;
     excludePattern: string;
   }>({
@@ -53,8 +72,10 @@ export default function NewScan() {
     scanPerformance: true,
     scanCache: true,
     aiCacheAnalysis: false,
-    aiModel: "gemma3:27b",
+    aiProvider: "custom" as AiProvider,
+    aiModel: "",
     scanResources: false,
+    enableDebugHeaders: false,
     includePattern: "",
     excludePattern: "",
   });
@@ -64,6 +85,13 @@ export default function NewScan() {
     onSuccess: (data) => {
       navigate(`/scans/${data.id}`);
     },
+  });
+
+  const { data: modelsData, isFetching: modelsFetching } = useQuery({
+    queryKey: ["ai-models", settings.aiProvider],
+    queryFn: () => aiApi.models(settings.aiProvider ?? "custom"),
+    enabled: settings.aiCacheAnalysis,
+    staleTime: 60_000,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -90,7 +118,11 @@ export default function NewScan() {
         crawlDelay: 0,
         includePattern: settings.includePattern || undefined,
         excludePattern: settings.excludePattern || undefined,
-        aiModel: settings.aiCacheAnalysis ? settings.aiModel : undefined,
+        aiProvider: settings.aiCacheAnalysis ? settings.aiProvider : undefined,
+        aiModel: settings.aiCacheAnalysis ? (settings.aiModel || modelsData?.models[0]) : undefined,
+        debugHeaders: (mode === "single" && settings.enableDebugHeaders)
+          ? buildDebugHeaders(selectedPragmas, fastlyDebug)
+          : undefined,
       },
     });
   };
@@ -232,17 +264,50 @@ export default function NewScan() {
           </div>
 
           {settings.aiCacheAnalysis && (
-            <div className="flex items-center gap-3 pl-1">
-              <label className="text-sm text-gray-600 whitespace-nowrap">AI model</label>
-              <select
-                value={settings.aiModel}
-                onChange={(e) => setSettings((s) => ({ ...s, aiModel: e.target.value as AiModel }))}
-                className="input py-1 text-sm w-auto"
-              >
-                <option value="gemma3:27b">gemma3:27b</option>
-                <option value="gemma4:31b">gemma4:31b</option>
-                <option value="gpt-oss:latest">gpt-oss:latest</option>
-              </select>
+            <div className="pl-1 space-y-2">
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-gray-600 whitespace-nowrap">Provider</label>
+                <div className="flex gap-1">
+                  {(["custom", "openai"] as AiProvider[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setSettings((s) => ({ ...s, aiProvider: p, aiModel: "" }))}
+                      className={clsx(
+                        "px-3 py-1 text-xs font-medium rounded-md border transition-colors",
+                        settings.aiProvider === p
+                          ? "bg-purple-600 text-white border-purple-600"
+                          : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                      )}
+                    >
+                      {p === "openai" ? "OpenAI" : "Custom"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-gray-600 whitespace-nowrap">Model</label>
+                {modelsFetching ? (
+                  <span className="text-xs text-gray-400">Loading models…</span>
+                ) : (
+                  <select
+                    value={settings.aiModel || modelsData?.models[0] || ""}
+                    onChange={(e) => setSettings((s) => ({ ...s, aiModel: e.target.value }))}
+                    className="input py-1 text-sm w-auto"
+                    disabled={!modelsData?.models.length}
+                  >
+                    {(modelsData?.models ?? []).map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                    {!modelsData?.models.length && (
+                      <option value="">No models available</option>
+                    )}
+                  </select>
+                )}
+                {modelsData?.fallback && (
+                  <span className="text-xs text-yellow-600">Provider unreachable — showing defaults</span>
+                )}
+              </div>
               <p className="text-xs text-gray-400">
                 Uses AI to reason about cache headers and estimate hit ratio per page
               </p>
@@ -260,6 +325,80 @@ export default function NewScan() {
               <span className="text-sm text-gray-700">Resource cache report</span>
               <span className="text-xs text-gray-400">(sub-resources: scripts, images, fonts, …)</span>
             </label>
+          )}
+
+          {mode === "single" && (
+            <div className="pl-0.5 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.enableDebugHeaders}
+                  onChange={(e) => {
+                    setSettings((s) => ({ ...s, enableDebugHeaders: e.target.checked }));
+                    if (!e.target.checked) { setSelectedPragmas([]); setFastlyDebug(false); }
+                  }}
+                  className="rounded border-gray-300 text-orange-500"
+                />
+                <span className="text-sm text-gray-700">Debug headers</span>
+                <span className="text-xs text-gray-400">(inject request headers to surface CDN diagnostics)</span>
+              </label>
+
+              {settings.enableDebugHeaders && (
+                <div className="ml-6 p-3 rounded-lg border border-orange-100 bg-orange-50/40 space-y-2">
+                  <p className="text-xs font-medium text-orange-800 mb-2">
+                    Akamai — Pragma debug directives
+                    <span className="ml-1 font-normal text-orange-600">
+                      (sent as <span className="font-mono">Pragma: …</span> request header)
+                    </span>
+                  </p>
+                  {AKAMAI_PRAGMA_OPTIONS.map((opt) => (
+                    <label key={opt.id} className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedPragmas.includes(opt.id)}
+                        onChange={(e) => {
+                          setSelectedPragmas((prev) =>
+                            e.target.checked
+                              ? [...prev, opt.id]
+                              : prev.filter((id) => id !== opt.id)
+                          );
+                        }}
+                        className="rounded border-orange-300 text-orange-500 mt-0.5"
+                      />
+                      <span className="flex-1">
+                        <span className="text-xs font-mono text-gray-800">{opt.label}</span>
+                        <span className="text-xs text-gray-400 ml-2">{opt.description}</span>
+                      </span>
+                    </label>
+                  ))}
+                  <p className="text-xs font-medium text-orange-800 mt-3 mb-2">
+                    Fastly
+                  </p>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fastlyDebug}
+                      onChange={(e) => setFastlyDebug(e.target.checked)}
+                      className="rounded border-orange-300 text-orange-500 mt-0.5"
+                    />
+                    <span className="flex-1">
+                      <span className="text-xs font-mono text-gray-800">fastly-debug: 1</span>
+                      <span className="text-xs text-gray-400 ml-2">Returns Fastly-Debug-TTL, Fastly-Debug-State, Fastly-Debug-Digest</span>
+                    </span>
+                  </label>
+
+                  {(selectedPragmas.length > 0 || fastlyDebug) && (
+                    <div className="text-xs font-mono text-orange-700 pt-2 mt-1 border-t border-orange-100 space-y-0.5">
+                      {selectedPragmas.length > 0 && <p>pragma: {selectedPragmas.join(", ")}</p>}
+                      {fastlyDebug && <p>fastly-debug: 1</p>}
+                    </div>
+                  )}
+                  <p className="text-xs text-orange-600 pt-1">
+                    Sent on all HTTP probes and Playwright browser requests.
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

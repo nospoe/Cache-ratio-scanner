@@ -78,7 +78,8 @@ docker compose down
 | Performance scan | On | Collect browser metrics |
 | Cache scan | On | Collect cache probe data |
 | AI cache analysis | Off | Use an LLM to reason about headers and estimate cache hit ratio |
-| AI model | `gemma3:27b` | `gemma3:27b`, `gemma4:31b`, `gpt-oss:latest` |
+| AI provider | Custom | **Custom** (Ollama / any OpenAI-compatible server) or **OpenAI** (direct ChatGPT integration) |
+| AI model | — | Fetched live from the selected provider; falls back to a default list if unreachable |
 
 ---
 
@@ -109,7 +110,7 @@ The full breakdown for a single page:
 - CDN detection signals and confidence score
 - Cache state timeline (every probe request with its cache state, age header, and latency)
 - Warm outcome: what happened after the cache warming cycle
-- AI cache analysis (when enabled): LLM reasoning, estimated hit ratio, and confidence score
+- AI cache analysis (when enabled): LLM reasoning, estimated hit ratio, confidence score, and AI-inferred CDN provider
 - Recommendations with evidence
 
 ### Global rankings
@@ -146,11 +147,22 @@ Cross-scan comparison. See which pages and scans perform best and worst for LCP,
 
 ## AI Cache Analysis
 
-AI cache analysis is an **optional, per-scan feature** that sends each page's HTTP response headers to an OpenAI-compatible LLM. The model reasons step-by-step about cache state indicators and returns a structured verdict — independently of the built-in CDN adapter logic.
+AI cache analysis is an **optional, per-scan feature** that sends each page's response headers and real latency measurements to an LLM. The model reasons about cache state indicators and returns a structured verdict — independently of the built-in CDN adapter logic.
 
 ### Why it exists
 
-The conventional cache analysis relies on vendor-specific header adapters (Cloudflare, CloudFront, Fastly, Akamai). If a site sits behind a custom proxy, an obscure CDN, or strips its cache headers, those adapters return `UNKNOWN`. The AI analyser reads the full header set and applies general HTTP caching knowledge, often surfacing useful signal even when no CDN fingerprint is present.
+The conventional cache analysis relies on vendor-specific header adapters (Cloudflare, CloudFront, Fastly, Akamai). If a site sits behind a custom proxy, an obscure CDN, or strips its cache headers, those adapters return `UNKNOWN`. The AI analyser reads the full header set and applies general HTTP caching knowledge, often surfacing useful signal even when no CDN fingerprint is present. It also incorporates real latency data: a significant TTFB/latency drop from cold to warmed probe is treated as a strong CDN edge-caching signal.
+
+### Providers
+
+Two providers are supported:
+
+| Provider | How it connects | When to use |
+|---|---|---|
+| **Custom** | `AI_API_BASE_URL` + optional `OPENAI_API_KEY` | Self-hosted Ollama, LiteLLM, or any OpenAI-compatible server |
+| **OpenAI** | `api.openai.com` + `OPENAI_API_KEY` | Direct ChatGPT — GPT-4o, GPT-4o mini, GPT-5, etc. |
+
+Models are fetched live from the provider's `/models` endpoint at scan-creation time. If the provider is unreachable a fallback list is shown and you can still proceed.
 
 ### How it works
 
@@ -160,21 +172,22 @@ AI analysis runs as **Phase 6** of the scan pipeline, after all HTTP probes and 
 Cold probe → Warm loop → CDN detection → Cache normalisation → Browser metrics → Recommendations → AI analysis
 ```
 
-For each page the worker sends:
-- The cold probe headers and HTTP status
-- The warmed probe headers and HTTP status (if available)
-- A summary of all warm events (request number, cache state, latency)
+For each page the worker sends to the model:
+- Cold probe: HTTP status, headers, latency, TTFB
+- Warmed probe: HTTP status, headers, latency, TTFB (if available)
+- All warm events with request number, cache state, and latency
 
-The model is instructed to reason about headers including `Cache-Control`, `CF-Cache-Status`, `X-Cache`, `Age`, `Vary`, `Via`, `Set-Cookie`, `Surrogate-Control`, and similar, then return a structured JSON result.
+The model reasons about headers (`Cache-Control`, `CF-Cache-Status`, `X-Cache`, `Age`, `Vary`, `Via`, `Set-Cookie`, `Surrogate-Control`, Akamai-specific headers, etc.) alongside timing signals, then returns a structured JSON result.
 
 ### Output per page
 
 | Field | Type | Description |
 |---|---|---|
 | `cached` | boolean | Whether the response was judged to be served from cache |
-| `reasoning` | string | Step-by-step explanation referencing specific headers |
+| `reasoning` | string | Step-by-step explanation referencing specific headers and latency |
 | `cache_hit_ratio` | float 0–1 | Estimated proportion of requests that would be cache hits |
 | `confidence` | float 0–1 | Model's self-assessed confidence in the verdict |
+| `inferred_cdn` | string \| null | CDN provider identified from headers (e.g. `"Akamai"`, `"Cloudflare"`) |
 | `model` | string | The model that produced this result |
 
 Stored as `ai_cache_analysis` JSONB on the `page_results` table. Visible in the **Page Detail** view.
@@ -187,21 +200,12 @@ When AI analysis was enabled the **Scan Dashboard** shows a summary card with:
 - Average AI-estimated cache hit ratio across all pages
 - Average confidence (colour-coded: green ≥70%, yellow ≥40%, red <40%)
 
-### Available models
-
-| Model | Notes |
-|---|---|
-| `gemma3:27b` | Default — good balance of speed and reasoning quality |
-| `gemma4:31b` | Larger model, more thorough step-by-step reasoning |
-| `gpt-oss:latest` | Alternative open-source model |
-
 ### Enabling AI analysis
 
 1. Tick **AI cache analysis** in the New Scan form
-2. Select the model from the dropdown that appears
-3. Set `AI_API_BASE_URL` and `OPENAI_API_KEY` in `.env`
-
-The worker calls `${AI_API_BASE_URL}/chat/completions` — a standard OpenAI-compatible endpoint. Set temperature `0.1`, `max_tokens: 512`.
+2. Select **Custom** or **OpenAI** as the provider
+3. Select a model from the dropdown (loaded live from the provider)
+4. Set the relevant environment variables in `.env` (see below)
 
 **Failures are non-fatal.** Network errors, HTTP errors, timeouts, and JSON parse failures are logged and skipped — the scan continues and the AI result for that page is simply absent. Set `LOG_LEVEL=debug` to see the full request payload and raw model response in worker logs.
 
@@ -232,8 +236,8 @@ Copy `.env.example` to `.env`. The defaults work for local use.
 | `PROBE_TIMEOUT_MS` | `15000` | HTTP probe timeout |
 | `MAX_WARM_ATTEMPTS` | `5` | Max warm requests per page |
 | `WARM_DELAY_MS` | `500` | Delay between warm requests |
-| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the OpenAI-compatible AI API |
-| `OPENAI_API_KEY` | *(empty)* | API key sent as `Authorization: Bearer` to the AI endpoint |
+| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the **custom** provider (Ollama / OpenAI-compatible server). Ignored when using the OpenAI provider. |
+| `OPENAI_API_KEY` | *(empty)* | API key for **both** providers. For OpenAI: authenticates against `api.openai.com`. For custom: sent as `Authorization: Bearer` — leave empty if not required. |
 
 ---
 

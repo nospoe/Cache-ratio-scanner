@@ -90,15 +90,15 @@ Before starting a scan you can enable or disable the following analysis types:
 | CDN cache analysis | On | Probe cache behaviour using HTTP requests and CDN header adapters |
 | AI cache analysis | Off | Use an LLM to reason about response headers and estimate cache hit ratio |
 
-When **AI cache analysis** is enabled, a model selector appears. Available models:
+When **AI cache analysis** is enabled, a provider toggle and model selector appear:
 
-| Model | Description |
-|-------|-------------|
-| `gemma3:27b` | Default — balanced speed and quality |
-| `gemma4:31b` | Larger model, more thorough reasoning |
-| `gpt-oss:latest` | Alternative open-source model |
+**Custom provider** (default) — connects to your `AI_API_BASE_URL` endpoint (Ollama, LiteLLM, or any OpenAI-compatible server). Models are fetched live from the endpoint.
 
-The AI analysis runs after all HTTP probes are complete for each page and adds an independent cache verdict with reasoning and an estimated hit ratio.
+**OpenAI** — connects directly to `api.openai.com` using your `OPENAI_API_KEY`. Models are fetched live from the OpenAI API. Supports any chat-capable OpenAI model including GPT-4o, GPT-4o mini, and GPT-5.
+
+Available models are loaded dynamically from the provider at scan-creation time. If the provider is unreachable, a fallback list is shown.
+
+The AI analysis runs after all HTTP probes are complete for each page and adds an independent cache verdict with reasoning, an estimated hit ratio, and an AI-inferred CDN provider name.
 
 ### Advanced Settings
 
@@ -178,7 +178,10 @@ When AI cache analysis was enabled for the scan, a dedicated card appears on the
 - **Cached** — the model's verdict (Cached / Not cached)
 - **AI-estimated cache hit ratio** — percentage of requests the model predicts would be cache hits based on the headers
 - **Analysis confidence** — how certain the model is (shown as a colour-coded progress bar: green ≥70%, yellow ≥40%, red <40%)
-- **Reasoning** — the model's step-by-step explanation of which headers indicate caching behaviour
+- **Inferred CDN** — the CDN provider the model identified from the headers (e.g. Akamai, Cloudflare, CloudFront, Fastly), or "None detected"
+- **Reasoning** — the model's step-by-step explanation referencing both headers and latency timing
+
+The AI analysis incorporates both response headers and real latency measurements (cold probe TTFB vs. warmed probe TTFB and total latency). A significant latency drop after warming is treated as a strong signal of CDN edge caching, even when no explicit cache hit header is present.
 
 The AI analysis is independent of CDN-specific adapters and can identify caching on custom or unrecognised CDN setups. The model used is shown next to the card title.
 
@@ -266,12 +269,23 @@ Content-Type: application/json
     "scanPerformance": true,
     "scanCache": true,
     "aiCacheAnalysis": false,
+    "aiProvider": "custom",    // "custom" | "openai"
     "aiModel": "gemma3:27b"
   }
 }
 
 Response: { "id": "...", "status": "queued" }
 ```
+
+### List available AI models
+```
+GET /api/ai/models?provider=custom
+GET /api/ai/models?provider=openai
+
+Response: { "provider": "openai", "models": ["gpt-4o", "gpt-4o-mini", ...], "fallback": false }
+```
+
+`fallback: true` means the provider's `/models` endpoint was unreachable and a hardcoded list was returned.
 
 ### Get scan status
 ```
@@ -344,8 +358,12 @@ OPENAI_API_KEY=your-api-key-here
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the OpenAI-compatible AI endpoint. The worker appends `/chat/completions` to form the full request URL. |
-| `OPENAI_API_KEY` | *(empty)* | API key sent as `Authorization: Bearer <key>`. Leave empty if the endpoint does not require authentication. |
+| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the custom/Ollama provider. The worker appends `/chat/completions` and `/models` to this base URL. |
+| `OPENAI_API_KEY` | *(empty)* | API key used for **both** providers. For the OpenAI provider it authenticates against `api.openai.com`. For a custom provider it is sent as `Authorization: Bearer <key>` — leave empty if the endpoint does not require authentication. |
+
+**Using OpenAI directly**: set `OPENAI_API_KEY` to your OpenAI API key, then select **OpenAI** as the provider in the New Scan form. No changes to `AI_API_BASE_URL` are needed — the OpenAI provider always connects to `api.openai.com`.
+
+**Using a custom/Ollama endpoint**: set `AI_API_BASE_URL` to your server's base URL and optionally set `OPENAI_API_KEY` if it requires authentication. Select **Custom** as the provider in the New Scan form.
 
 ### Scaling workers
 
@@ -389,5 +407,11 @@ WORKER_REPLICAS=2 docker-compose up --scale worker=2
 **AI cache analysis card not showing on page detail**
 - AI analysis must be enabled at scan creation time — it cannot be added retroactively.
 - AI failures are non-fatal and silently skipped. Check worker logs for `"AI cache analysis failed"` messages.
-- Verify `AI_API_BASE_URL` and `OPENAI_API_KEY` are set correctly in your `.env` file.
-- The AI endpoint must expose an OpenAI-compatible `/chat/completions` path at the configured base URL.
+- For the **OpenAI provider**: verify `OPENAI_API_KEY` is set correctly in `.env`. The key must have access to chat completion models.
+- For the **custom provider**: verify `AI_API_BASE_URL` points to an OpenAI-compatible endpoint that exposes `/chat/completions`.
+- Set `LOG_LEVEL=debug` to see the full AI request payload and raw model response in worker logs.
+
+**Model dropdown shows "Provider unreachable — showing defaults"**
+- The API server cannot reach the AI provider's `/models` endpoint at scan creation time.
+- For OpenAI: check your `OPENAI_API_KEY` is valid and has not expired.
+- For custom provider: check `AI_API_BASE_URL` is reachable from the API container. You can still select a model from the fallback list and proceed.

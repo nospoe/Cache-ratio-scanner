@@ -30,6 +30,7 @@ export interface BrowserOptions {
   customUserAgent?: string;
   timeoutMs?: number;
   collectResources?: boolean;
+  extraHeaders?: Record<string, string>;
 }
 
 export async function collectBrowserMetrics(
@@ -37,7 +38,7 @@ export async function collectBrowserMetrics(
   url: string,
   options: BrowserOptions
 ): Promise<CollectBrowserMetricsResult> {
-  const { deviceProfile, customViewport, customUserAgent, timeoutMs = 30000, collectResources = false } = options;
+  const { deviceProfile, customViewport, customUserAgent, timeoutMs = 30000, collectResources = false, extraHeaders } = options;
   const viewport =
     deviceProfile === "mobile"
       ? MOBILE_VIEWPORT
@@ -118,6 +119,11 @@ export async function collectBrowserMetrics(
       }
     }
   });
+
+  // Inject debug headers into every browser request (main document + sub-resources)
+  if (extraHeaders && Object.keys(extraHeaders).length > 0) {
+    await page.setExtraHTTPHeaders(extraHeaders);
+  }
 
   try {
     // Inject PerformanceObserver before navigation — runs in browser context.
