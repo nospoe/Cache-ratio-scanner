@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import clsx from "clsx";
 import { BarChart2, LayoutDashboard, Plus, Settings, Zap } from "lucide-react";
+import { Breadcrumbs } from "./Breadcrumbs";
 
 const navItems = [
   { to: "/scans/new", icon: Plus, label: "New Scan" },
@@ -56,8 +57,11 @@ export function AppShell() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+      <main className="flex-1 overflow-auto flex flex-col">
+        <Breadcrumbs />
+        <div className="flex-1">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

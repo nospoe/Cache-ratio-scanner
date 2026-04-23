@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { pageApi, resourceApi } from "../api/client";
@@ -11,7 +11,7 @@ import {
   formatMs, formatBytes, formatRatio, formatDate,
   lcpTrend, ttfbTrend, clsTrend, tbtTrend,
 } from "../utils/format";
-import { ChevronLeft, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Printer } from "lucide-react";
+import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Printer } from "lucide-react";
 import type { CacheEvent, Recommendation, AiCacheAnalysisResult, AiRecommendation, ResourceCacheResult, NormalizedCacheState } from "../types";
 import clsx from "clsx";
 
@@ -447,9 +447,6 @@ export default function PageDetail() {
     <div className="px-6 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <Link to={`/scans/${scanId}/pages`} className="text-gray-400 hover:text-gray-600 mt-1 no-print">
-          <ChevronLeft className="w-5 h-5" />
-        </Link>
         <div className="flex-1">
           <h1 className="text-lg font-bold text-gray-900 break-all">{page.original_url}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-1">
