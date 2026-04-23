@@ -12,7 +12,7 @@ import {
   lcpTrend, ttfbTrend, clsTrend, tbtTrend,
 } from "../utils/format";
 import { ChevronLeft, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Printer } from "lucide-react";
-import type { CacheEvent, Recommendation, AiCacheAnalysisResult, ResourceCacheResult, NormalizedCacheState } from "../types";
+import type { CacheEvent, Recommendation, AiCacheAnalysisResult, AiRecommendation, ResourceCacheResult, NormalizedCacheState } from "../types";
 import clsx from "clsx";
 
 function CacheEventsTable({ events }: { events: CacheEvent[] }) {
@@ -187,9 +187,44 @@ function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] })
   );
 }
 
+const AI_REC_STYLES: Record<AiRecommendation["category"], { bg: string; border: string; label: string; dot: string }> = {
+  performance: { bg: "bg-blue-50",   border: "border-blue-200",   label: "text-blue-700",   dot: "bg-blue-500"   },
+  caching:     { bg: "bg-green-50",  border: "border-green-200",  label: "text-green-700",  dot: "bg-green-500"  },
+  security:    { bg: "bg-red-50",    border: "border-red-200",    label: "text-red-700",    dot: "bg-red-500"    },
+  cdn:         { bg: "bg-indigo-50", border: "border-indigo-200", label: "text-indigo-700", dot: "bg-indigo-500" },
+};
+
+const PRIORITY_STYLES: Record<AiRecommendation["priority"], string> = {
+  high:   "bg-red-100 text-red-700",
+  medium: "bg-yellow-100 text-yellow-700",
+  low:    "bg-gray-100 text-gray-600",
+};
+
+function AiRecommendationItem({ rec }: { rec: AiRecommendation }) {
+  const s = AI_REC_STYLES[rec.category];
+  return (
+    <div className={clsx("rounded-lg border p-3 flex gap-3", s.bg, s.border)}>
+      <span className={clsx("mt-1.5 w-2 h-2 rounded-full shrink-0", s.dot)} />
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+          <span className={clsx("text-xs font-semibold uppercase tracking-wide", s.label)}>
+            {rec.category}
+          </span>
+          <span className={clsx("text-xs px-1.5 py-0.5 rounded font-medium", PRIORITY_STYLES[rec.priority])}>
+            {rec.priority}
+          </span>
+          <span className="text-sm font-medium text-gray-900">{rec.title}</span>
+        </div>
+        <p className="text-xs text-gray-600 leading-relaxed">{rec.description}</p>
+      </div>
+    </div>
+  );
+}
+
 function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
   const hitPct = Math.round(result.cache_hit_ratio * 100);
   const confPct = Math.round(result.confidence * 100);
+  const recs = result.recommendations ?? [];
 
   return (
     <Card padding="none">
@@ -205,7 +240,7 @@ function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
           {result.cached ? "Cached" : "Not cached"}
         </span>
       </div>
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-5">
         <div className="grid grid-cols-3 gap-4">
           <div>
             <p className="text-xs font-medium text-gray-500 mb-1">AI-estimated cache hit ratio</p>
@@ -239,6 +274,19 @@ function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
           <p className="text-xs font-medium text-gray-500 mb-1">Reasoning</p>
           <p className="text-sm text-gray-700 leading-relaxed">{result.reasoning}</p>
         </div>
+        {recs.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">
+              AI Recommendations
+              <span className="ml-1.5 text-gray-400 font-normal">({recs.length})</span>
+            </p>
+            <div className="space-y-2">
+              {recs.map((rec, i) => (
+                <AiRecommendationItem key={i} rec={rec} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );

@@ -104,6 +104,13 @@ export interface ResourceCacheResult {
   is_third_party: boolean;
 }
 
+export interface AiRecommendation {
+  category: "performance" | "caching" | "security" | "cdn";
+  priority: "high" | "medium" | "low";
+  title: string;
+  description: string;
+}
+
 export interface AiCacheAnalysisResult {
   cached: boolean;
   reasoning: string;
@@ -111,6 +118,7 @@ export interface AiCacheAnalysisResult {
   confidence: number;
   model: string;
   inferred_cdn?: string | null;
+  recommendations?: AiRecommendation[];
 }
 
 export interface Recommendation {

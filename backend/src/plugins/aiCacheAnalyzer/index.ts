@@ -44,8 +44,23 @@ After reasoning, output ONLY a valid JSON object (no markdown, no extra text) wi
   "reasoning": "<concise explanation referencing both headers and timing that led to this conclusion>",
   "cache_hit_ratio": <float 0.0–1.0 — estimated proportion of requests that would be cache hits>,
   "confidence": <float 0.0–1.0 — how confident you are in this assessment>,
-  "inferred_cdn": "<name of the CDN provider you identify from the headers, e.g. 'Akamai', 'Cloudflare', 'CloudFront', 'Fastly', or null if none detected>"
-}`;
+  "inferred_cdn": "<name of the CDN provider you identify from the headers, e.g. 'Akamai', 'Cloudflare', 'CloudFront', 'Fastly', or null if none detected>",
+  "recommendations": [
+    {
+      "category": "<one of: performance | caching | security | cdn>",
+      "priority": "<one of: high | medium | low>",
+      "title": "<short actionable title, max 80 chars>",
+      "description": "<concrete improvement suggestion based on the observed headers and timing, 1–3 sentences>"
+    }
+  ]
+}
+
+For recommendations, analyse the observed headers and timing and suggest 1–5 specific, actionable improvements across these categories:
+- "caching": Missing or weak cache-control directives, short max-age, no public directive, missing surrogate keys, Vary header misuse, Set-Cookie preventing caching.
+- "performance": High TTFB or latency even on warm requests, render-blocking patterns visible from response type, uncompressed content (missing content-encoding), large payloads.
+- "security": Missing security headers (Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options, Content-Security-Policy), HTTPS downgrade signals, mixed content indicators.
+- "cdn": CDN not detected or misconfigured, missing edge-caching headers, no surrogate-control, stale-while-revalidate not set, no CDN-level compression, suboptimal cache key configuration.
+Only include recommendations that are directly supported by the evidence in the headers and timing data. Omit any category where no actionable issue is found.`;
 
 function buildUserMessage(state: PageWorkingState): string {
   const lines: string[] = [`URL: ${state.url}`, ""];
@@ -110,7 +125,29 @@ function parseAiResponse(text: string): Omit<AiCacheAnalysisResult, "model"> {
     ? String(parsed.inferred_cdn)
     : null;
 
-  return { cached, reasoning, cache_hit_ratio, confidence, inferred_cdn };
+  const VALID_CATEGORIES = ["performance", "caching", "security", "cdn"] as const;
+  const VALID_PRIORITIES = ["high", "medium", "low"] as const;
+  type ValidCategory = typeof VALID_CATEGORIES[number];
+  type ValidPriority = typeof VALID_PRIORITIES[number];
+
+  const recommendations = Array.isArray(parsed.recommendations)
+    ? (parsed.recommendations as Record<string, unknown>[])
+        .filter((r) =>
+          typeof r === "object" && r !== null &&
+          VALID_CATEGORIES.includes(r.category as ValidCategory) &&
+          VALID_PRIORITIES.includes(r.priority as ValidPriority) &&
+          typeof r.title === "string" &&
+          typeof r.description === "string"
+        )
+        .map((r) => ({
+          category: r.category as ValidCategory,
+          priority: r.priority as ValidPriority,
+          title: String(r.title).slice(0, 120),
+          description: String(r.description).slice(0, 500),
+        }))
+    : [];
+
+  return { cached, reasoning, cache_hit_ratio, confidence, inferred_cdn, recommendations };
 }
 
 export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageWorkingState> {
@@ -132,7 +169,7 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
     // Anthropic Messages API format
     requestBody = {
       model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
     };
@@ -154,7 +191,7 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
     // For non-OpenAI (Ollama-compatible), cap tokens and set low temperature.
     if (provider !== "openai") {
       requestBody.temperature = 0.1;
-      requestBody.max_tokens = 1024;
+      requestBody.max_tokens = 4096;
     }
     requestHeaders = {
       "Content-Type": "application/json",

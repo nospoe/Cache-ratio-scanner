@@ -237,6 +237,13 @@ export interface ResourceCacheResult {
 
 // ─── AI Cache Analysis ────────────────────────────────────────────────────────
 
+export interface AiRecommendation {
+  category: "performance" | "caching" | "security" | "cdn";
+  priority: "high" | "medium" | "low";
+  title: string;
+  description: string;
+}
+
 export interface AiCacheAnalysisResult {
   cached: boolean;
   reasoning: string;
@@ -244,6 +251,7 @@ export interface AiCacheAnalysisResult {
   confidence: number; // 0–1
   model: string;
   inferred_cdn?: string | null; // CDN provider inferred from headers by AI
+  recommendations?: AiRecommendation[]; // AI-generated improvement suggestions
 }
 
 // ─── Recommendation ───────────────────────────────────────────────────────────
