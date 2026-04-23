@@ -1,16 +1,22 @@
 # Site Scanner and CDN performance analysis tool
 
+<br>
 
 <img width="1445" height="458" alt="Screenshot 2026-04-23 at 09 56 00" src="https://github.com/user-attachments/assets/d6fa19a2-1653-438d-9377-8a44d796e915" />
 
+<br><br>
+
 <img width="1445" height="294" alt="Screenshot 2026-04-23 at 09 55 43" src="https://github.com/user-attachments/assets/99104c5c-5b7d-4b54-b0c0-d2d7908e340e" />
+
+<br><br>
 
 <img width="1445" height="778" alt="Screenshot 2026-04-23 at 09 55 14" src="https://github.com/user-attachments/assets/2c429660-0be0-41cc-9ad2-7f9391a8d7f5" />
 
+<br><br>
+
 <img width="649" height="669" alt="Screenshot 2026-04-23 at 09 56 26" src="https://github.com/user-attachments/assets/a9af7bb7-93eb-4d4e-8848-245f7b72bf33" />
 
-
-
+<br><br><br>
 > **Vibecoded** with Claude. Architected and designed by a senior system engineer with more than 10 years of experience working with CDNs. A web performance and CDN cache scanner that actually warms the cache before measuring it.
 
 Most tools fire one HTTP request and read the cache header. Site Scanner does something smarter: it makes a cold request, warms the CDN cache with follow-up requests, then measures real browser performance on the warmed URL. The result is a much more accurate picture of what your users actually experience.
