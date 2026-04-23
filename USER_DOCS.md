@@ -98,6 +98,8 @@ When **AI cache analysis** is enabled, a provider toggle and model selector appe
 
 **OpenAI** — connects directly to `api.openai.com` using your `OPENAI_API_KEY`. Models are fetched live from the OpenAI API. Supports any chat-capable OpenAI model including GPT-4o, GPT-4o mini, and GPT-5.
 
+**Anthropic** — connects directly to `api.anthropic.com` using your `ANTHROPIC_API_KEY` via the native Claude Messages API. Supports Claude models including claude-opus-4-5, claude-sonnet-4-5, and claude-haiku-4-5.
+
 Available models are loaded dynamically from the provider at scan-creation time. If the provider is unreachable, a fallback list is shown.
 
 The AI analysis runs after all HTTP probes are complete for each page and adds an independent cache verdict with reasoning, an estimated hit ratio, and an AI-inferred CDN provider name.
@@ -397,19 +399,23 @@ WARM_DELAY_MS=500
 # Security (disable only for isolated testing)
 SSRF_PROTECTION=true
 
-# AI cache analysis — OpenAI-compatible endpoint
-AI_API_BASE_URL=https://chat.netcentric.biz/api
-OPENAI_API_KEY=your-api-key-here
+# AI cache analysis
+AI_API_BASE_URL=https://chat.netcentric.biz/api  # Custom (Ollama/LiteLLM) provider base URL
+OPENAI_API_KEY=your-openai-key-here              # OpenAI and Custom provider key
+ANTHROPIC_API_KEY=your-anthropic-key-here        # Anthropic (Claude) provider key
 ```
 
 #### AI API settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the custom/Ollama provider. The worker appends `/chat/completions` and `/models` to this base URL. |
-| `OPENAI_API_KEY` | *(empty)* | API key used for **both** providers. For the OpenAI provider it authenticates against `api.openai.com`. For a custom provider it is sent as `Authorization: Bearer <key>` — leave empty if the endpoint does not require authentication. |
+| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the custom/Ollama provider. The worker appends `/chat/completions` and `/models` to this base URL. Ignored for OpenAI and Anthropic providers. |
+| `OPENAI_API_KEY` | *(empty)* | API key for the **OpenAI** and **Custom** providers. For OpenAI it authenticates against `api.openai.com`. For a custom provider it is sent as `Authorization: Bearer <key>` — leave empty if the endpoint does not require authentication. |
+| `ANTHROPIC_API_KEY` | *(empty)* | API key for the **Anthropic** provider. Sent as `x-api-key` header to `api.anthropic.com`. |
 
 **Using OpenAI directly**: set `OPENAI_API_KEY` to your OpenAI API key, then select **OpenAI** as the provider in the New Scan form. No changes to `AI_API_BASE_URL` are needed — the OpenAI provider always connects to `api.openai.com`.
+
+**Using Anthropic (Claude)**: set `ANTHROPIC_API_KEY` to your Anthropic API key, then select **Anthropic** as the provider in the New Scan form. No other configuration is required.
 
 **Using a custom/Ollama endpoint**: set `AI_API_BASE_URL` to your server's base URL and optionally set `OPENAI_API_KEY` if it requires authentication. Select **Custom** as the provider in the New Scan form.
 
@@ -456,12 +462,14 @@ WORKER_REPLICAS=2 docker-compose up --scale worker=2
 - AI analysis must be enabled at scan creation time — it cannot be added retroactively.
 - AI failures are non-fatal and silently skipped. Check worker logs for `"AI cache analysis failed"` messages.
 - For the **OpenAI provider**: verify `OPENAI_API_KEY` is set correctly in `.env`. The key must have access to chat completion models.
+- For the **Anthropic provider**: verify `ANTHROPIC_API_KEY` is set correctly in `.env`. The key must have access to the Claude Messages API.
 - For the **custom provider**: verify `AI_API_BASE_URL` points to an OpenAI-compatible endpoint that exposes `/chat/completions`.
 - Set `LOG_LEVEL=debug` to see the full AI request payload and raw model response in worker logs.
 
 **Model dropdown shows "Provider unreachable — showing defaults"**
 - The API server cannot reach the AI provider's `/models` endpoint at scan creation time.
 - For OpenAI: check your `OPENAI_API_KEY` is valid and has not expired.
+- For Anthropic: check your `ANTHROPIC_API_KEY` is valid and that `api.anthropic.com` is reachable from the API container.
 - For custom provider: check `AI_API_BASE_URL` is reachable from the API container. You can still select a model from the fallback list and proceed.
 
 **Debug headers selected but no extra headers visible in the response**

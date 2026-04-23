@@ -1,6 +1,6 @@
 export type ScanMode = "single" | "list" | "sitemap" | "crawl";
 export type AiModel = string;
-export type AiProvider = "openai" | "custom";
+export type AiProvider = "openai" | "custom" | "anthropic";
 export type ScanStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type CdnProvider = "cloudflare" | "cloudfront" | "fastly" | "akamai" | "unknown";
 export type CdnConfidence = "high" | "medium" | "low" | "none";

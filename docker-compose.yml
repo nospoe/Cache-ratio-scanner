@@ -50,6 +50,7 @@ services:
       MAX_SCAN_URLS: ${MAX_SCAN_URLS:-500}
       AI_API_BASE_URL: ${AI_API_BASE_URL:-https://chat.netcentric.biz/api}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,6 +82,7 @@ services:
       SSRF_PROTECTION: ${SSRF_PROTECTION:-true}
       AI_API_BASE_URL: ${AI_API_BASE_URL:-https://chat.netcentric.biz/api}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -7,6 +7,9 @@ const log = childLogger("api.ai");
 const CUSTOM_AI_BASE_URL = process.env.AI_API_BASE_URL ?? "https://chat.netcentric.biz/api";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
+const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
+const ANTHROPIC_VERSION = "2023-06-01";
 
 // Well-known fallbacks if the /models endpoint is unreachable
 const FALLBACK_OPENAI_MODELS = [
@@ -15,12 +18,22 @@ const FALLBACK_OPENAI_MODELS = [
 const FALLBACK_CUSTOM_MODELS = [
   "gemma3:27b", "gemma4:31b", "gpt-oss:latest",
 ];
+const FALLBACK_ANTHROPIC_MODELS = [
+  "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5-20251001",
+  "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229",
+];
 
-async function fetchModels(baseUrl: string, apiKey: string): Promise<string[]> {
+async function fetchModels(baseUrl: string, apiKey: string, isAnthropic = false): Promise<string[]> {
+  const headers: Record<string, string> = {};
+  if (isAnthropic) {
+    if (apiKey) headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = ANTHROPIC_VERSION;
+  } else {
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
   const res = await fetch(`${baseUrl}/models`, {
-    headers: {
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-    },
+    headers,
     signal: AbortSignal.timeout(8000),
   });
 
@@ -31,7 +44,7 @@ async function fetchModels(baseUrl: string, apiKey: string): Promise<string[]> {
     models?: Array<{ name?: string; id?: string }>;
   };
 
-  // OpenAI format: { data: [{ id, object: "model" }] }
+  // OpenAI / Anthropic format: { data: [{ id, object: "model" }] }
   if (Array.isArray(data.data)) {
     return data.data
       .map((m) => m.id)
@@ -56,19 +69,37 @@ async function fetchModels(baseUrl: string, apiKey: string): Promise<string[]> {
   return [];
 }
 
-// GET /api/ai/models?provider=openai|custom
+// GET /api/ai/models?provider=openai|custom|anthropic
 router.get("/models", async (req: Request, res: Response) => {
-  const provider = req.query.provider === "openai" ? "openai" : "custom";
-  const baseUrl = provider === "openai" ? OPENAI_BASE_URL : CUSTOM_AI_BASE_URL;
-  const apiKey = OPENAI_API_KEY;
+  const rawProvider = req.query.provider;
+  const provider = rawProvider === "openai" ? "openai" : rawProvider === "anthropic" ? "anthropic" : "custom";
+
+  let baseUrl: string;
+  let apiKey: string;
+  let isAnthropic = false;
+
+  if (provider === "openai") {
+    baseUrl = OPENAI_BASE_URL;
+    apiKey = OPENAI_API_KEY;
+  } else if (provider === "anthropic") {
+    baseUrl = ANTHROPIC_BASE_URL;
+    apiKey = ANTHROPIC_API_KEY;
+    isAnthropic = true;
+  } else {
+    baseUrl = CUSTOM_AI_BASE_URL;
+    apiKey = OPENAI_API_KEY;
+  }
 
   try {
-    const models = await fetchModels(baseUrl, apiKey);
+    const models = await fetchModels(baseUrl, apiKey, isAnthropic);
     return res.json({ provider, models });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.warn({ provider, baseUrl, err: msg }, "Failed to fetch AI models — returning fallback list");
-    const fallback = provider === "openai" ? FALLBACK_OPENAI_MODELS : FALLBACK_CUSTOM_MODELS;
+    const fallback =
+      provider === "openai" ? FALLBACK_OPENAI_MODELS :
+      provider === "anthropic" ? FALLBACK_ANTHROPIC_MODELS :
+      FALLBACK_CUSTOM_MODELS;
     return res.json({ provider, models: fallback, fallback: true });
   }
 });

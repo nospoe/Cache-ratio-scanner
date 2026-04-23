@@ -85,7 +85,7 @@ export const resourceApi = {
 };
 
 export const aiApi = {
-  models: (provider: "openai" | "custom") =>
+  models: (provider: "openai" | "custom" | "anthropic") =>
     api.get<{ provider: string; models: string[]; fallback?: boolean }>(
       `/api/ai/models?provider=${provider}`
     ).then((r) => r.data),

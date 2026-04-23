@@ -268,7 +268,7 @@ export default function NewScan() {
               <div className="flex items-center gap-3">
                 <label className="text-sm text-gray-600 whitespace-nowrap">Provider</label>
                 <div className="flex gap-1">
-                  {(["custom", "openai"] as AiProvider[]).map((p) => (
+                  {(["custom", "openai", "anthropic"] as AiProvider[]).map((p) => (
                     <button
                       key={p}
                       type="button"
@@ -280,7 +280,7 @@ export default function NewScan() {
                           : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
                       )}
                     >
-                      {p === "openai" ? "OpenAI" : "Custom"}
+                      {p === "openai" ? "OpenAI" : p === "anthropic" ? "Anthropic" : "Custom"}
                     </button>
                   ))}
                 </div>

@@ -78,7 +78,7 @@ docker compose down
 | Performance scan | On | Collect browser metrics |
 | Cache scan | On | Collect cache probe data |
 | AI cache analysis | Off | Use an LLM to reason about headers and estimate cache hit ratio |
-| AI provider | Custom | **Custom** (Ollama / any OpenAI-compatible server) or **OpenAI** (direct ChatGPT integration) |
+| AI provider | Custom | **Custom** (Ollama / any OpenAI-compatible server), **OpenAI** (direct ChatGPT), or **Anthropic** (Claude models) |
 | AI model | — | Fetched live from the selected provider; falls back to a default list if unreachable |
 | Debug headers | Off | Inject CDN diagnostic request headers (Single URL only) — surfaces hidden cache metadata in response headers |
 
@@ -157,12 +157,15 @@ The conventional cache analysis relies on vendor-specific header adapters (Cloud
 
 ### Providers
 
-Two providers are supported:
+Three providers are supported:
 
 | Provider | How it connects | When to use |
 |---|---|---|
 | **Custom** | `AI_API_BASE_URL` + optional `OPENAI_API_KEY` | Self-hosted Ollama, LiteLLM, or any OpenAI-compatible server |
 | **OpenAI** | `api.openai.com` + `OPENAI_API_KEY` | Direct ChatGPT — GPT-4o, GPT-4o mini, GPT-5, etc. |
+| **Anthropic** | `api.anthropic.com` + `ANTHROPIC_API_KEY` | Claude models — claude-opus-4-5, claude-sonnet-4-5, claude-haiku-4-5, etc. |
+
+Anthropic uses the native Messages API (`/v1/messages`) with `x-api-key` authentication — not the OpenAI-compatible format. No additional configuration beyond `ANTHROPIC_API_KEY` is needed.
 
 Models are fetched live from the provider's `/models` endpoint at scan-creation time. If the provider is unreachable a fallback list is shown and you can still proceed.
 
@@ -205,7 +208,7 @@ When AI analysis was enabled the **Scan Dashboard** shows a summary card with:
 ### Enabling AI analysis
 
 1. Tick **AI cache analysis** in the New Scan form
-2. Select **Custom** or **OpenAI** as the provider
+2. Select **Custom**, **OpenAI**, or **Anthropic** as the provider
 3. Select a model from the dropdown (loaded live from the provider)
 4. Set the relevant environment variables in `.env` (see below)
 
@@ -275,8 +278,9 @@ Copy `.env.example` to `.env`. The defaults work for local use.
 | `PROBE_TIMEOUT_MS` | `15000` | HTTP probe timeout |
 | `MAX_WARM_ATTEMPTS` | `5` | Max warm requests per page |
 | `WARM_DELAY_MS` | `500` | Delay between warm requests |
-| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the **custom** provider (Ollama / OpenAI-compatible server). Ignored when using the OpenAI provider. |
-| `OPENAI_API_KEY` | *(empty)* | API key for **both** providers. For OpenAI: authenticates against `api.openai.com`. For custom: sent as `Authorization: Bearer` — leave empty if not required. |
+| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the **custom** provider (Ollama / OpenAI-compatible server). Ignored when using OpenAI or Anthropic providers. |
+| `OPENAI_API_KEY` | *(empty)* | API key for **OpenAI** and **Custom** providers. For OpenAI: authenticates against `api.openai.com`. For custom: sent as `Authorization: Bearer` — leave empty if not required. |
+| `ANTHROPIC_API_KEY` | *(empty)* | API key for the **Anthropic** provider. Sent as `x-api-key` header to `api.anthropic.com`. |
 
 ---
 

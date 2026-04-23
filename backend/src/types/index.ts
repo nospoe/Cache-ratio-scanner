@@ -6,7 +6,7 @@ export type DeviceProfile = "desktop" | "mobile" | "custom";
 export type InputType = "single_url" | "url_list" | "sitemap" | "crawl" | "csv";
 
 export type AiModel = string; // free-form — resolved dynamically from provider
-export type AiProvider = "openai" | "custom";
+export type AiProvider = "openai" | "custom" | "anthropic";
 
 export interface ScanSettings {
   mode: ScanMode;

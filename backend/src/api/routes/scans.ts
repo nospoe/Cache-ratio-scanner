@@ -32,7 +32,7 @@ const settingsSchema = z.object({
   scanPerformance: z.boolean().optional(),
   scanCache: z.boolean().optional(),
   aiCacheAnalysis: z.boolean().optional(),
-  aiProvider: z.enum(["openai", "custom"]).optional(),
+  aiProvider: z.enum(["openai", "custom", "anthropic"]).optional(),
   aiModel: z.string().max(100).optional(),
   scanResources: z.boolean().optional(),
   debugHeaders: z.record(z.string().max(1000)).optional(),

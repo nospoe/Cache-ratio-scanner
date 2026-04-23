@@ -316,9 +316,10 @@ function ResponseHeadersCard({
               onClick={() => setTab(t.id)}
               className={clsx(
                 "px-3 py-1 text-xs font-medium rounded-md transition-colors",
-                tab === t.id
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                tab === t.id && t.id === "cold" && "bg-blue-50 text-blue-700",
+                tab === t.id && t.id === "warm" && "bg-yellow-50 text-yellow-700",
+                tab !== t.id && t.id === "cold" && "text-blue-700 hover:bg-blue-50",
+                tab !== t.id && t.id === "warm" && "text-yellow-700 hover:bg-yellow-50",
               )}
             >
               {t.label}

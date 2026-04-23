@@ -6,9 +6,14 @@ const log = childLogger("aiCacheAnalyzer");
 const CUSTOM_AI_BASE_URL = process.env.AI_API_BASE_URL ?? "https://chat.netcentric.biz/api";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
+const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
+const ANTHROPIC_VERSION = "2023-06-01";
 
 function getBaseUrl(provider?: string): string {
-  return provider === "openai" ? OPENAI_BASE_URL : CUSTOM_AI_BASE_URL;
+  if (provider === "openai") return OPENAI_BASE_URL;
+  if (provider === "anthropic") return ANTHROPIC_BASE_URL;
+  return CUSTOM_AI_BASE_URL;
 }
 
 const SYSTEM_PROMPT = `You are an expert HTTP caching analyst. Your job is to examine HTTP response headers and timing data to determine whether a response was served from a CDN cache.
@@ -109,25 +114,52 @@ function parseAiResponse(text: string): Omit<AiCacheAnalysisResult, "model"> {
 }
 
 export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageWorkingState> {
-  const model = state.settings.aiModel ?? "gpt-4o-mini";
-  const endpoint = `${getBaseUrl(state.settings.aiProvider)}/chat/completions`;
+  const provider = state.settings.aiProvider;
+  const isAnthropic = provider === "anthropic";
+  const model = state.settings.aiModel ?? (isAnthropic ? "claude-3-5-sonnet-20241022" : "gpt-4o-mini");
+  const endpoint = isAnthropic
+    ? `${ANTHROPIC_BASE_URL}/messages`
+    : `${getBaseUrl(provider)}/chat/completions`;
 
-  log.info({ pageId: state.pageId, url: state.url, model, endpoint }, "Starting AI cache analysis");
+  log.info({ pageId: state.pageId, url: state.url, model, endpoint, provider }, "Starting AI cache analysis");
 
   const userMessage = buildUserMessage(state);
 
-  const requestBody: Record<string, unknown> = {
-    model,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userMessage },
-    ],
-  };
-  // Reasoning models (o1, o3, gpt-5, …) only accept the default temperature.
-  // For non-OpenAI (Ollama-compatible), cap tokens and set low temperature.
-  if (state.settings.aiProvider !== "openai") {
-    requestBody.temperature = 0.1;
-    requestBody.max_tokens = 1024;
+  let requestBody: Record<string, unknown>;
+  let requestHeaders: Record<string, string>;
+
+  if (isAnthropic) {
+    // Anthropic Messages API format
+    requestBody = {
+      model,
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    };
+    requestHeaders = {
+      "Content-Type": "application/json",
+      "anthropic-version": ANTHROPIC_VERSION,
+      ...(ANTHROPIC_API_KEY ? { "x-api-key": ANTHROPIC_API_KEY } : {}),
+    };
+  } else {
+    // OpenAI-compatible format
+    requestBody = {
+      model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+    };
+    // Reasoning models (o1, o3, gpt-5, …) only accept the default temperature.
+    // For non-OpenAI (Ollama-compatible), cap tokens and set low temperature.
+    if (provider !== "openai") {
+      requestBody.temperature = 0.1;
+      requestBody.max_tokens = 1024;
+    }
+    requestHeaders = {
+      "Content-Type": "application/json",
+      ...(OPENAI_API_KEY ? { Authorization: `Bearer ${OPENAI_API_KEY}` } : {}),
+    };
   }
 
   log.debug(
@@ -135,6 +167,7 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
       pageId: state.pageId,
       endpoint,
       model,
+      provider,
       system_prompt_chars: SYSTEM_PROMPT.length,
       user_message_chars: userMessage.length,
       user_message: userMessage,
@@ -149,10 +182,7 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(OPENAI_API_KEY ? { Authorization: `Bearer ${OPENAI_API_KEY}` } : {}),
-      },
+      headers: requestHeaders,
       body: JSON.stringify(requestBody),
       signal: AbortSignal.timeout(60_000),
     });
@@ -161,9 +191,11 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
 
     if (!response.ok) {
       const rawBody = await response.text().catch(() => "");
-      // Scrub any bearer token pattern before logging — defensive measure in case
-      // the upstream server echoes back request metadata in its error payload.
-      const safeBody = rawBody.replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, "Bearer [Redacted]").slice(0, 500);
+      // Scrub any API key patterns before logging.
+      const safeBody = rawBody
+        .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, "Bearer [Redacted]")
+        .replace(/(x-api-key['":\s]+)[A-Za-z0-9\-._~+/]+=*/gi, "$1[Redacted]")
+        .slice(0, 500);
       log.error(
         { pageId: state.pageId, url: state.url, httpStatus: response.status, latencyMs, body: safeBody },
         "AI API returned non-2xx response"
@@ -171,11 +203,36 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
       throw new Error(`AI API returned ${response.status}: ${safeBody.slice(0, 200)}`);
     }
 
-    const data = (await response.json()) as {
+    // Anthropic and OpenAI have different response shapes
+    type AnthropicResponse = {
+      content?: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+      model?: string;
+    };
+    type OpenAIResponse = {
       choices?: Array<{ message?: { content?: string } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
       model?: string;
     };
+    const data = (await response.json()) as AnthropicResponse & OpenAIResponse;
+
+    let content: string | undefined;
+    let promptTokens: number | null = null;
+    let completionTokens: number | null = null;
+    let totalTokens: number | null = null;
+
+    if (isAnthropic) {
+      content = data.content?.find((b) => b.type === "text")?.text;
+      promptTokens = data.usage?.input_tokens ?? null;
+      completionTokens = data.usage?.output_tokens ?? null;
+      totalTokens =
+        promptTokens != null && completionTokens != null ? promptTokens + completionTokens : null;
+    } else {
+      content = data.choices?.[0]?.message?.content;
+      promptTokens = (data.usage as OpenAIResponse["usage"])?.prompt_tokens ?? null;
+      completionTokens = (data.usage as OpenAIResponse["usage"])?.completion_tokens ?? null;
+      totalTokens = (data.usage as OpenAIResponse["usage"])?.total_tokens ?? null;
+    }
 
     log.debug(
       {
@@ -184,7 +241,7 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
         httpStatus: response.status,
         reportedModel: data.model,
         usage: data.usage ?? null,
-        rawContent: data.choices?.[0]?.message?.content,
+        rawContent: content,
       },
       "AI raw response"
     );
@@ -195,14 +252,13 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
         url: state.url,
         model,
         latencyMs,
-        promptTokens: data.usage?.prompt_tokens ?? null,
-        completionTokens: data.usage?.completion_tokens ?? null,
-        totalTokens: data.usage?.total_tokens ?? null,
+        promptTokens,
+        completionTokens,
+        totalTokens,
       },
       "AI API response received"
     );
 
-    const content = data.choices?.[0]?.message?.content;
     if (!content) {
       throw new Error("AI API returned empty content");
     }
