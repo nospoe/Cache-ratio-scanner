@@ -2,20 +2,21 @@
 
 <br>
 
-<img width="1445" height="458" alt="Screenshot 2026-04-23 at 09 56 00" src="https://github.com/user-attachments/assets/d6fa19a2-1653-438d-9377-8a44d796e915" />
+<img width="1444" height="739" alt="Screenshot 2026-04-23 at 11 19 00" src="https://github.com/user-attachments/assets/af40658d-2432-465f-8772-0d9c2abb2d25" />
+<img width="1444" height="353" alt="Screenshot 2026-04-23 at 11 19 12" src="https://github.com/user-attachments/assets/32d026ac-9774-41c6-9869-88b49c551dc4" />
 
 <br><br>
 
-<img width="1445" height="717" alt="Screenshot 2026-04-23 at 10 45 35" src="https://github.com/user-attachments/assets/73541d7c-cd9d-4f3c-ab21-08f709cd28dd" />
-
-
-<br><br>
-
-<img width="1445" height="778" alt="Screenshot 2026-04-23 at 09 55 14" src="https://github.com/user-attachments/assets/2c429660-0be0-41cc-9ad2-7f9391a8d7f5" />
+<img width="1489" height="813" alt="Screenshot 2026-04-23 at 11 20 45" src="https://github.com/user-attachments/assets/07298f15-225c-47d1-9761-b769b8b99800" />
+<img width="1485" height="815" alt="Screenshot 2026-04-23 at 11 21 50" src="https://github.com/user-attachments/assets/9c91ed51-fa7e-44ea-8005-f3598bcf0fa2" />
 
 <br><br>
 
-<img width="649" height="669" alt="Screenshot 2026-04-23 at 09 56 26" src="https://github.com/user-attachments/assets/a9af7bb7-93eb-4d4e-8848-245f7b72bf33" />
+<img width="1487" height="792" alt="Screenshot 2026-04-23 at 11 22 20" src="https://github.com/user-attachments/assets/bde0a9fc-fc0e-4165-be53-32849d67b0ff" />
+
+<br><br>
+
+<img width="1480" height="657" alt="Screenshot 2026-04-23 at 11 22 08" src="https://github.com/user-attachments/assets/c4fe0062-e4c9-42ae-b11d-dd155c7fc54a" />
 
 <br><br><br>
 > **Vibecoded** with Claude. Architected and designed by a senior system engineer with more than 10 years of experience working with CDNs. A web performance and CDN cache scanner that actually warms the cache before measuring it.
