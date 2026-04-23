@@ -1,8 +1,9 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
 import { scanApi, pageApi } from "../api/client";
 import { MetricCard, Card } from "../components/ui/Card";
-import { StatusBadge, CdnBadge } from "../components/ui/Badge";
+import { StatusBadge, CdnBadge, CacheStateBadge } from "../components/ui/Badge";
 import { CacheRatioDonut } from "../components/charts/CacheRatioDonut";
 import { SkeletonCard } from "../components/ui/Skeleton";
 import { ErrorState } from "../components/ui/EmptyState";
@@ -10,10 +11,228 @@ import { ProgressBar } from "../components/ui/ProgressBar";
 import {
   formatMs, formatRatio, formatDate, lcpTrend, ttfbTrend
 } from "../utils/format";
-import { Brain, Layers, ArrowRight, FileSearch } from "lucide-react";
+import { Brain, Layers, ArrowRight, FileSearch, ChevronDown, ChevronUp, ScrollText, Terminal } from "lucide-react";
 import { Download, List, BarChart2, X } from "lucide-react";
 import clsx from "clsx";
 import type { Scan } from "../types";
+
+function ScanActivityLog({ scanId }: { scanId: string }) {
+  const [open, setOpen] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["scan-activity-log", scanId],
+    queryFn: () => pageApi.list(scanId, { pageSize: 200, sortBy: "created_at", sortDir: "asc" }),
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  return (
+    <Card padding="none">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-6 py-4 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
+      >
+        <ScrollText className="w-4 h-4 text-gray-400" />
+        <h2 className="font-semibold text-gray-900">Scan Activity Log</h2>
+        <span className="text-xs text-gray-400 ml-1">all pages processed in order</span>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400 ml-auto" /> : <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-gray-100 overflow-x-auto">
+          {isLoading ? (
+            <div className="p-6 space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-8 rounded bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="px-4 py-2 text-left font-semibold text-gray-500">#</th>
+                  <th className="px-4 py-2 text-left font-semibold text-gray-500">URL</th>
+                  <th className="px-3 py-2 text-center font-semibold text-gray-500">Status</th>
+                  <th className="px-3 py-2 text-center font-semibold text-gray-500">HTTP</th>
+                  <th className="px-3 py-2 text-center font-semibold text-gray-500">Cache</th>
+                  <th className="px-3 py-2 text-center font-semibold text-gray-500">CDN</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-500">Cold TTFB</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-500">Warm TTFB</th>
+                  <th className="px-4 py-2 text-right font-semibold text-gray-500">Detail</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 font-mono">
+                {(data?.items ?? []).map((page, i) => (
+                  <tr key={page.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-gray-400">{i + 1}</td>
+                    <td className="px-4 py-2 max-w-xs">
+                      <span className="block truncate text-gray-700" title={page.original_url}>
+                        {page.original_url.replace(/^https?:\/\/[^/]+/, "") || "/"}
+                      </span>
+                      {page.error_message && (
+                        <span className="text-red-500 text-[10px]">{page.error_message.slice(0, 60)}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <StatusBadge status={page.status} />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {page.http_status ? (
+                        <span className={clsx(
+                          "px-1.5 py-0.5 rounded font-medium",
+                          page.http_status < 300 ? "bg-green-50 text-green-700" :
+                          page.http_status < 400 ? "bg-yellow-50 text-yellow-700" :
+                          "bg-red-50 text-red-700"
+                        )}>{page.http_status}</span>
+                      ) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <CacheStateBadge state={page.cache_state} />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <CdnBadge provider={page.cdn_provider} />
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {formatMs(page.cold_http?.ttfb_ms)}
+                    </td>
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {formatMs(page.warmed_http?.ttfb_ms)}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Link
+                        to={`/scans/${scanId}/pages/${page.id}`}
+                        className="text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+interface ScanLogLine {
+  ts?: number;
+  level?: "info" | "warn" | "error" | "debug";
+  msg?: string;
+  component?: string;
+  type?: "end";
+}
+
+const LEVEL_STYLES: Record<string, string> = {
+  info:  "text-green-400",
+  warn:  "text-yellow-400",
+  error: "text-red-400",
+  debug: "text-gray-500",
+};
+
+function formatLogTs(ts: number): string {
+  const d = new Date(ts);
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map((n) => String(n).padStart(2, "0"))
+    .join(":");
+}
+
+function ScanLogTerminal({ scanId, isLive }: { scanId: string; isLive: boolean }) {
+  const [open, setOpen] = useState(true);
+  const [lines, setLines] = useState<ScanLogLine[]>([]);
+  const [connected, setConnected] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    const baseUrl = (import.meta.env.VITE_API_URL as string) || "";
+    const url = `${baseUrl}/api/scans/${scanId}/logs`;
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.onopen = () => setConnected(true);
+
+    es.onmessage = (evt) => {
+      try {
+        const line: ScanLogLine = JSON.parse(evt.data);
+        if (line.type === "end") {
+          setConnected(false);
+          es.close();
+          return;
+        }
+        setLines((prev) => [...prev, line]);
+      } catch { /* ignore */ }
+    };
+
+    es.onerror = () => {
+      setConnected(false);
+      es.close();
+    };
+
+    return () => {
+      es.close();
+      esRef.current = null;
+    };
+  }, [scanId]);
+
+  // Auto-scroll to bottom when new lines arrive and panel is open
+  useEffect(() => {
+    if (open && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [lines, open]);
+
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-950 shadow-lg mb-6 overflow-hidden">
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-gray-900 transition-colors"
+      >
+        <Terminal className="w-4 h-4 text-green-400 shrink-0" />
+        <span className="font-mono text-sm font-semibold text-gray-100">Scan Log</span>
+        {isLive && connected && (
+          <span className="flex items-center gap-1.5 text-xs text-green-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            live
+          </span>
+        )}
+        {!connected && lines.length > 0 && (
+          <span className="text-xs text-gray-500">{lines.length} lines</span>
+        )}
+        {open
+          ? <ChevronUp className="w-4 h-4 text-gray-500 ml-auto shrink-0" />
+          : <ChevronDown className="w-4 h-4 text-gray-500 ml-auto shrink-0" />}
+      </button>
+
+      {/* Terminal body */}
+      {open && (
+        <div className="border-t border-gray-800 px-5 py-3 h-80 overflow-y-auto font-mono text-xs leading-relaxed">
+          {lines.length === 0 ? (
+            <p className="text-gray-600 italic">Waiting for log output...</p>
+          ) : (
+            lines.map((line, i) => (
+              <div key={i} className="flex gap-3 group">
+                <span className="text-gray-600 shrink-0 select-none w-16">
+                  {line.ts ? formatLogTs(line.ts) : ""}
+                </span>
+                <span className={clsx("shrink-0 w-10 select-none", LEVEL_STYLES[line.level ?? "info"])}>
+                  {(line.level ?? "info").toUpperCase().slice(0, 4)}
+                </span>
+                <span className="text-gray-200 break-all">{line.msg ?? ""}</span>
+              </div>
+            ))
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ScanProgressCard({ scan }: { scan: Scan }) {
   const progress = scan.progress;
@@ -139,6 +358,9 @@ export default function ScanDashboard() {
 
       {/* Progress card for active scans */}
       {isRunning && <ScanProgressCard scan={scan} />}
+
+      {/* Scan log terminal */}
+      <ScanLogTerminal scanId={id!} isLive={isRunning} />
 
       {/* Error state */}
       {scan.status === "failed" && (
@@ -421,6 +643,9 @@ export default function ScanDashboard() {
           </p>
         </div>
       )}
+
+      {/* Scan activity log */}
+      {scan.status === "completed" && <ScanActivityLog scanId={id!} />}
     </div>
   );
 }

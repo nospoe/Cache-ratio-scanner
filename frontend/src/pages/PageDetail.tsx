@@ -69,6 +69,7 @@ function CacheEventsTable({ events }: { events: CacheEvent[] }) {
 
 const RESOURCE_TYPE_ORDER = ["document", "script", "stylesheet", "font", "image", "xhr", "fetch", "media", "other"];
 
+
 function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] }) {
   const [open, setOpen] = useState(true);
 
@@ -150,24 +151,17 @@ function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] })
                       <tr key={i} className="hover:bg-gray-50">
                         <td className="px-4 py-1.5">
                           <span
-                            className={clsx(
-                              "block truncate font-mono",
-                              r.is_third_party ? "text-orange-600" : "text-gray-700"
-                            )}
+                            className={clsx("block truncate font-mono", r.is_third_party ? "text-orange-600" : "text-gray-700")}
                             title={r.url}
                           >
                             {r.url.replace(/^https?:\/\/[^/]+/, "") || r.url}
                           </span>
-                          {r.is_third_party && (
-                            <span className="text-[10px] text-orange-400">3rd party</span>
-                          )}
+                          {r.is_third_party && <span className="text-[10px] text-orange-400">3rd party</span>}
                         </td>
                         <td className="px-2 py-1.5 text-center">
                           <EffectiveCacheStateBadge state={r.cache_state as NormalizedCacheState | null} />
                         </td>
-                        <td className="px-2 py-1.5 text-center text-gray-500 tabular-nums">
-                          {r.http_status ?? "—"}
-                        </td>
+                        <td className="px-2 py-1.5 text-center text-gray-500 tabular-nums">{r.http_status ?? "—"}</td>
                         <td className="px-2 py-1.5 text-center text-gray-500 tabular-nums">
                           {r.latency_ms != null ? `${r.latency_ms}ms` : "—"}
                         </td>
@@ -176,9 +170,7 @@ function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] })
                         </td>
                         <td className="px-2 py-1.5 text-right text-gray-400 tabular-nums">
                           {r.content_length != null
-                            ? r.content_length >= 1024
-                              ? `${Math.round(r.content_length / 1024)}KB`
-                              : `${r.content_length}B`
+                            ? r.content_length >= 1024 ? `${Math.round(r.content_length / 1024)}KB` : `${r.content_length}B`
                             : "—"}
                         </td>
                       </tr>
@@ -301,6 +293,7 @@ function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
     </Card>
   );
 }
+
 
 function RecommendationItem({ rec }: { rec: Recommendation }) {
   const icon = {
