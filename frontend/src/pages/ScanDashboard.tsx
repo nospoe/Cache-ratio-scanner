@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { scanApi } from "../api/client";
+import { scanApi, pageApi } from "../api/client";
 import { MetricCard, Card } from "../components/ui/Card";
 import { StatusBadge, CdnBadge } from "../components/ui/Badge";
 import { CacheRatioDonut } from "../components/charts/CacheRatioDonut";
@@ -10,7 +10,7 @@ import { ProgressBar } from "../components/ui/ProgressBar";
 import {
   formatMs, formatRatio, formatDate, lcpTrend, ttfbTrend
 } from "../utils/format";
-import { Brain } from "lucide-react";
+import { Brain, Layers, ArrowRight } from "lucide-react";
 import { Download, List, BarChart2, X } from "lucide-react";
 import clsx from "clsx";
 import type { Scan } from "../types";
@@ -59,6 +59,15 @@ export default function ScanDashboard() {
     },
     enabled: !!id,
   });
+
+  // For single-URL scans with resource report, fetch the first page ID to link directly to page detail
+  const { data: firstPageData } = useQuery({
+    queryKey: ["scan-first-page", id],
+    queryFn: () => pageApi.list(id!, { page: 1, pageSize: 1 }),
+    enabled: !!id && scan?.mode === "single" && scan?.status === "completed" && scan?.settings.scanResources === true,
+    staleTime: Infinity,
+  });
+  const firstPageId = firstPageData?.items[0]?.id;
 
   if (isLoading) {
     return (
@@ -242,6 +251,34 @@ export default function ScanDashboard() {
         </>
       )}
 
+      {/* Resource Cache Report — prominent CTA for single-URL scans */}
+      {scan.mode === "single" && scan.status === "completed" && scan.settings.scanResources && (
+        <div className="relative overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 p-6 mb-6 shadow-sm">
+          {/* decorative blur blob */}
+          <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-indigo-100/60 blur-2xl pointer-events-none" />
+          <div className="relative flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-200">
+                <Layers className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-indigo-900">Resource Cache Report ready</p>
+                <p className="text-sm text-indigo-500 mt-0.5">
+                  Per-resource breakdown for scripts, images, fonts &amp; all sub-resources loaded by the page
+                </p>
+              </div>
+            </div>
+            <Link
+              to={firstPageId ? `/scans/${id}/pages/${firstPageId}` : `/scans/${id}/pages`}
+              className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-md shadow-indigo-200"
+            >
+              View Report
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* AI cache analysis summary */}
       {scan.settings.aiCacheAnalysis && agg && (
         <Card className="border-purple-100 bg-purple-50/40">
@@ -344,35 +381,15 @@ export default function ScanDashboard() {
         </div>
       </Card>
 
-      {/* Resource report hint for single-URL scans */}
-      {scan.mode === "single" && scan.status === "completed" && (
-        <div className={clsx(
-          "rounded-lg border p-4 text-sm flex items-start gap-3",
-          scan.settings.scanResources
-            ? "border-indigo-100 bg-indigo-50/40 text-indigo-800"
-            : "border-gray-200 bg-gray-50 text-gray-500"
-        )}>
-          <div className="flex-1">
-            {scan.settings.scanResources ? (
-              <>
-                <p className="font-medium mb-0.5">Resource Cache Report available</p>
-                <p className="text-xs">
-                  Cache state breakdown for all sub-resources (scripts, images, fonts, etc.) is available on the{" "}
-                  <Link to={`/scans/${id}/pages`} className="underline font-medium">Page Detail</Link>{" "}
-                  view — click into the scanned page to see it.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-medium mb-0.5">Resource Cache Report not enabled</p>
-                <p className="text-xs">
-                  Re-run this scan with <span className="font-medium">Resource cache report</span> checked to get
-                  a per-resource breakdown of cache states for all scripts, images, fonts, and other sub-resources
-                  loaded by the page.
-                </p>
-              </>
-            )}
-          </div>
+      {/* Resource report not enabled — subtle hint at the bottom */}
+      {scan.mode === "single" && scan.status === "completed" && !scan.settings.scanResources && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500 flex items-start gap-3">
+          <Layers className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
+          <p>
+            <span className="font-medium text-gray-600">Resource Cache Report not enabled.</span>{" "}
+            Re-run with <span className="font-medium">Resource cache report</span> checked to get a per-resource
+            breakdown of cache states for scripts, images, fonts, and other sub-resources.
+          </p>
         </div>
       )}
     </div>
