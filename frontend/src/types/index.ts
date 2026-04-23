@@ -160,6 +160,7 @@ export interface ProbeRecord {
   content_type: string | null;
   redirect_count: number;
   redirect_chain: string[];
+  request_headers?: Record<string, string>;
   response_headers: Record<string, string>;
 }
 

@@ -8,6 +8,7 @@ import { updateScanStatus, updateScanAggregate } from "../db/repositories/scanRe
 import { auditLog } from "../db/repositories/auditRepo";
 import { runMigrations } from "../db/migrate";
 import { childLogger } from "../utils/logger";
+import { publishScanLog } from "../utils/scanLogger";
 
 const log = childLogger("worker");
 
@@ -41,12 +42,14 @@ async function processScan(job: Job<ScanJobPayload>): Promise<void> {
 
   await updateScanStatus(scanId, "running");
   await auditLog({ event: "scan.started", scanId, actor: "worker", details: { mode } });
+  await publishScanLog(scanId, "info", `[scan] Starting ${mode} scan › ${rootInput}`);
 
   const startTime = Date.now();
 
   try {
     // Resolve URLs
     await job.updateProgress({ status: "resolving", message: "Resolving URLs..." });
+    await publishScanLog(scanId, "info", "[crawler] Resolving URLs...");
     const crawledUrls = await resolveUrls(mode, rootInput, settings, urlList);
 
     if (crawledUrls.length === 0) {
@@ -54,9 +57,26 @@ async function processScan(job: Job<ScanJobPayload>): Promise<void> {
     }
 
     log.info({ scanId, count: crawledUrls.length }, "URLs resolved, starting batch");
+    await publishScanLog(scanId, "info", `[crawler] Resolved ${crawledUrls.length} URL${crawledUrls.length !== 1 ? "s" : ""} — starting batch`);
 
-    // Run batch
+    // Run batch — emit a log line per URL as it starts scanning
+    let lastUrl = "";
+    let lastCompleted = 0;
+    let lastFailed = 0;
+
     await runBatch(crawledUrls, scanId, settings, async (progress) => {
+      if (progress.currentUrl && progress.currentUrl !== lastUrl) {
+        lastUrl = progress.currentUrl;
+        await publishScanLog(scanId, "info", `[batch] → ${progress.currentUrl}  [${progress.completed + progress.failed + 1}/${progress.total}]`);
+      }
+      if (progress.completed > lastCompleted) {
+        lastCompleted = progress.completed;
+      }
+      if (progress.failed > lastFailed) {
+        lastFailed = progress.failed;
+        await publishScanLog(scanId, "warn", `[batch] ✗ Page failed  (${progress.failed} failure${progress.failed !== 1 ? "s" : ""} so far)`);
+      }
+
       await job.updateProgress({
         status: "scanning",
         total: progress.total,
@@ -69,6 +89,7 @@ async function processScan(job: Job<ScanJobPayload>): Promise<void> {
 
     // Build aggregate
     await job.updateProgress({ status: "aggregating", message: "Building summary..." });
+    await publishScanLog(scanId, "info", "[scan] Building aggregate summary...");
     const scanDurationMs = Date.now() - startTime;
     const aggregate = await buildAggregate(scanId, scanDurationMs);
     await updateScanAggregate(scanId, aggregate);
@@ -84,10 +105,17 @@ async function processScan(job: Job<ScanJobPayload>): Promise<void> {
       },
     });
 
+    const durationSec = (scanDurationMs / 1000).toFixed(1);
+    await publishScanLog(
+      scanId, "info",
+      `[scan] ✓ Completed in ${durationSec}s — ${aggregate.completed_pages}/${aggregate.total_pages} pages OK` +
+      (aggregate.failed_pages > 0 ? `, ${aggregate.failed_pages} failed` : ""),
+    );
     log.info({ scanId, duration: scanDurationMs }, "Scan completed successfully");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ scanId, err: msg }, "Scan failed");
+    await publishScanLog(scanId, "error", `[scan] ✗ Scan failed: ${msg}`);
     await updateScanStatus(scanId, "failed", msg);
     await auditLog({ event: "scan.failed", scanId, actor: "worker", details: { error: msg } });
     throw err;

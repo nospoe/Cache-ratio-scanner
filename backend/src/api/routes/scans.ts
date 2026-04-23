@@ -2,7 +2,8 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { createScan, getScan, listScans, cancelScan } from "../../db/repositories/scanRepo";
-import { enqueueScan, cancelScanJob, getScanJob } from "../../queue/scanQueue";
+import { enqueueScan, cancelScanJob, getScanJob, createRedisConnection } from "../../queue/scanQueue";
+import { getScanLogs, getScanLogChannel } from "../../utils/scanLogger";
 import { auditLog } from "../../db/repositories/auditRepo";
 import { validateUrlSync } from "../../utils/ssrfValidator";
 import type { ScanSettings } from "../../types";
@@ -232,6 +233,70 @@ router.get("/:id/progress", async (req: Request, res: Response) => {
   };
 
   poll().catch(() => res.end());
+});
+
+// GET /scans/:id/logs (SSE — historical + live log stream)
+router.get("/:id/logs", async (req: Request, res: Response) => {
+  const scanId = req.params.id;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const sendLine = (data: unknown) => {
+    try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch { /* client gone */ }
+  };
+
+  // Flush historical log lines first
+  try {
+    const history = await getScanLogs(scanId);
+    history.forEach(sendLine);
+  } catch { /* ignore */ }
+
+  // If scan is already terminal, just close
+  const scan = await getScan(scanId).catch(() => null);
+  const TERMINAL = ["completed", "failed", "cancelled"];
+  if (!scan || TERMINAL.includes(scan.status)) {
+    sendLine({ type: "end" });
+    return res.end();
+  }
+
+  // Subscribe to live log events via Redis pub/sub
+  const subscriber = createRedisConnection();
+  const channel = getScanLogChannel(scanId);
+  let closed = false;
+
+  req.on("close", async () => {
+    closed = true;
+    try { await subscriber.unsubscribe(channel); } catch { /* ignore */ }
+    subscriber.disconnect();
+  });
+
+  subscriber.on("message", (_chan: string, message: string) => {
+    if (closed) return;
+    try { sendLine(JSON.parse(message)); } catch { /* ignore */ }
+  });
+
+  await subscriber.subscribe(channel).catch(() => { /* ignore */ });
+
+  // Poll for terminal state so we can close the stream cleanly
+  (async () => {
+    while (!closed) {
+      await new Promise((r) => setTimeout(r, 3000));
+      if (closed) break;
+      try {
+        const s = await getScan(scanId);
+        if (!s || TERMINAL.includes(s.status)) {
+          sendLine({ type: "end" });
+          res.end();
+          await subscriber.unsubscribe(channel).catch(() => {});
+          subscriber.disconnect();
+          closed = true;
+        }
+      } catch { break; }
+    }
+  })().catch(() => { res.end(); });
 });
 
 export default router;

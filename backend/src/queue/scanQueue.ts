@@ -15,6 +15,15 @@ export function getRedisConnection(): IORedis {
   return redisConnection;
 }
 
+/** Creates a fresh, independent Redis connection (needed for subscribe). */
+export function createRedisConnection(): IORedis {
+  const url = process.env.REDIS_URL || "redis://localhost:6379";
+  return new IORedis(url, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+}
+
 export const SCAN_QUEUE_NAME = "scan-jobs";
 
 let scanQueue: Queue<ScanJobPayload> | null = null;
