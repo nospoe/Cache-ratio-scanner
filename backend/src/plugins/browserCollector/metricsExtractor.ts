@@ -160,9 +160,15 @@ export async function collectBrowserMetrics(
     const navigationStart = performance.now();
 
     try {
-      await page.goto(url, { timeout: timeoutMs, waitUntil: "load" });
-      // Best-effort wait for network to settle; many sites never reach networkidle
-      // due to websockets / polling — don't fail if it doesn't happen.
+      // Use domcontentloaded — more reliable than "load" which blocks on every
+      // sub-resource including third-party analytics/pixels that may hang or be
+      // unreachable from inside the Docker network.
+      await page.goto(url, { timeout: timeoutMs, waitUntil: "domcontentloaded" });
+      // Best-effort waits to capture late-loading resources.
+      // networkidle may never fire on sites with websockets/polling — ignore timeout.
+      try {
+        await page.waitForLoadState("load", { timeout: 8000 });
+      } catch { /* ignore */ }
       try {
         await page.waitForLoadState("networkidle", { timeout: 5000 });
       } catch {

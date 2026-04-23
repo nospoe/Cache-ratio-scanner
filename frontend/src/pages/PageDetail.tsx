@@ -94,9 +94,16 @@ function ResourceCacheTable({ resources }: { resources: ResourceCacheResult[] })
         onClick={() => setOpen((o) => !o)}
         className="w-full px-6 py-4 border-b border-gray-100 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
       >
-        <h2 className="font-semibold text-gray-900">Resource Cache Report</h2>
-        <span className="text-xs text-gray-400">{resources.length} resources</span>
-        <span className="ml-auto text-sm font-semibold text-gray-700 mr-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3">
+            <h2 className="font-semibold text-gray-900">Resource Cache Report</h2>
+            <span className="text-xs text-gray-400">{resources.length} resources</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-0.5">
+            All sub-resources (scripts, images, fonts, XHR) captured by the browser — not the root document
+          </p>
+        </div>
+        <span className="text-sm font-semibold text-gray-700 mr-2 shrink-0">
           Hit ratio: {Math.round(hitRatio * 100)}%
         </span>
         {open
@@ -245,6 +252,9 @@ function AiCacheAnalysisCard({ result }: { result: AiCacheAnalysisResult }) {
           <div>
             <p className="text-xs font-medium text-gray-500 mb-1">AI-estimated cache hit ratio</p>
             <p className="text-2xl font-bold text-gray-900">{hitPct}%</p>
+            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+              Root document only — based on the HTTP probe headers sent to the model
+            </p>
           </div>
           <div>
             <p className="text-xs font-medium text-gray-500 mb-1">Analysis confidence</p>
@@ -568,6 +578,9 @@ export default function PageDetail() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
               <CacheRatioDonut hitRatio={page.cache_hit_ratio} title="Cache Hit Ratio" />
+              <p className="text-xs text-gray-400 mt-2 text-center leading-relaxed">
+                Root document only — ratio of warm HTTP probe requests that returned a cache HIT state
+              </p>
             </div>
             <div className="space-y-3">
               <div>
@@ -635,6 +648,20 @@ export default function PageDetail() {
       {/* Resource cache report */}
       {resources && resources.length > 0 && (
         <ResourceCacheTable resources={resources} />
+      )}
+      {resources !== undefined && resources.length === 0 && page.browser_metrics === null && (
+        <Card className="border-yellow-200 bg-yellow-50/50">
+          <div className="flex gap-3 items-start">
+            <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">Resource cache report unavailable</p>
+              <p className="text-xs text-yellow-700 mt-0.5">
+                The browser pass timed out or failed for this page — sub-resource data could not be collected.
+                Try re-running the scan, or increase <span className="font-mono">BROWSER_TIMEOUT_MS</span> in your environment if the site is slow to load.
+              </p>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* AI cache analysis */}
