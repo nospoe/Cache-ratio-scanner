@@ -10,7 +10,7 @@ import { ProgressBar } from "../components/ui/ProgressBar";
 import {
   formatMs, formatRatio, formatDate, lcpTrend, ttfbTrend
 } from "../utils/format";
-import { Brain, Layers, ArrowRight } from "lucide-react";
+import { Brain, Layers, ArrowRight, FileSearch } from "lucide-react";
 import { Download, List, BarChart2, X } from "lucide-react";
 import clsx from "clsx";
 import type { Scan } from "../types";
@@ -249,6 +249,35 @@ export default function ScanDashboard() {
             </Card>
           </div>
         </>
+      )}
+
+      {/* Scan Results CTA — for crawl/sitemap/list scans */}
+      {scan.mode !== "single" && scan.status === "completed" && agg && agg.completed_pages > 0 && (
+        <div className="relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-50/30 p-6 mb-6 shadow-sm">
+          <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-blue-100/60 blur-2xl pointer-events-none" />
+          <div className="relative flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-200">
+                <FileSearch className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-blue-900">
+                  {agg.completed_pages} page{agg.completed_pages !== 1 ? "s" : ""} scanned
+                </p>
+                <p className="text-sm text-blue-500 mt-0.5">
+                  View individual cache states, performance metrics, and AI analysis per page
+                </p>
+              </div>
+            </div>
+            <Link
+              to={`/scans/${id}/pages`}
+              className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-200"
+            >
+              View Results
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
       )}
 
       {/* Resource Cache Report — prominent CTA for single-URL scans */}
