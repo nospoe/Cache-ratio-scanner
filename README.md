@@ -1,6 +1,15 @@
 # Site Scanner and CDN performance analysis tool
 
 <br>
+<br><br>
+
+<img width="1444" height="896" alt="Screenshot 2026-04-24 at 21 04 08" src="https://github.com/user-attachments/assets/257b225e-64e6-4ab9-8cad-4a5e380e35ab" />
+
+<br><br>
+
+<img width="1444" height="917" alt="Screenshot 2026-04-24 at 20 15 35" src="https://github.com/user-attachments/assets/2465c0aa-cfc3-4f2a-86de-53764a35d7c8" />
+
+<br><br>
 
 <img width="1444" height="739" alt="Screenshot 2026-04-23 at 11 19 00" src="https://github.com/user-attachments/assets/af40658d-2432-465f-8772-0d9c2abb2d25" />
 
