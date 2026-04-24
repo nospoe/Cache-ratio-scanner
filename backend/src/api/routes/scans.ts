@@ -35,6 +35,7 @@ const settingsSchema = z.object({
   aiCacheAnalysis: z.boolean().optional(),
   aiProvider: z.enum(["openai", "custom", "anthropic"]).optional(),
   aiModel: z.string().max(100).optional(),
+  aiExtraPrompt: z.string().max(2000).optional(),
   scanResources: z.boolean().optional(),
   debugHeaders: z.record(z.string().max(1000)).optional(),
 });

@@ -35,6 +35,7 @@ export interface ScanSettings {
   aiCacheAnalysis: boolean;
   aiProvider?: AiProvider;
   aiModel?: AiModel;
+  aiExtraPrompt?: string;
   scanResources: boolean;
   debugHeaders?: Record<string, string>;
 }
@@ -251,6 +252,7 @@ export interface AiCacheAnalysisResult {
   confidence: number; // 0–1
   model: string;
   inferred_cdn?: string | null; // CDN provider inferred from headers by AI
+  operator_ack?: string | null; // AI acknowledgment of operator's extra prompt
   recommendations?: AiRecommendation[]; // AI-generated improvement suggestions
 }
 
