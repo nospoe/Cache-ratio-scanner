@@ -4,7 +4,7 @@ import { childLogger } from "../../utils/logger";
 const router = Router();
 const log = childLogger("api.ai");
 
-const CUSTOM_AI_BASE_URL = process.env.AI_API_BASE_URL ?? "https://chat.netcentric.biz/api";
+const CUSTOM_AI_BASE_URL = process.env.AI_API_BASE_URL ?? "http://localhost:11434/v1";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
 const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
