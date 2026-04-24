@@ -74,7 +74,7 @@ The result is a full-stack cache and performance audit that goes well beyond hea
 
 ## Quick start
 
-You need **Docker** and **Docker Compose**. That's it.
+You need **Docker** and **Docker Compose**.
 
 ```bash
 git clone https://github.com/nospoe/Cache-ratio-scanner.git 
