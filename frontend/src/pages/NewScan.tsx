@@ -56,6 +56,9 @@ export default function NewScan() {
     aiModel: string;
     aiExtraPrompt: string;
     scanResources: boolean;
+    enableBasicAuth: boolean;
+    basicAuthUser: string;
+    basicAuthPass: string;
     enableDebugHeaders: boolean;
     includePattern: string;
     excludePattern: string;
@@ -77,6 +80,9 @@ export default function NewScan() {
     aiModel: "",
     aiExtraPrompt: "",
     scanResources: false,
+    enableBasicAuth: false,
+    basicAuthUser: "",
+    basicAuthPass: "",
     enableDebugHeaders: false,
     includePattern: "",
     excludePattern: "",
@@ -123,6 +129,9 @@ export default function NewScan() {
         aiProvider: settings.aiCacheAnalysis ? settings.aiProvider : undefined,
         aiModel: settings.aiCacheAnalysis ? (settings.aiModel || modelsData?.models[0]) : undefined,
         aiExtraPrompt: settings.aiCacheAnalysis && settings.aiExtraPrompt.trim() ? settings.aiExtraPrompt.trim() : undefined,
+        basicAuth: (mode === "single" && settings.enableBasicAuth && settings.basicAuthUser)
+          ? { username: settings.basicAuthUser, password: settings.basicAuthPass }
+          : undefined,
         debugHeaders: (mode === "single" && settings.enableDebugHeaders)
           ? buildDebugHeaders(selectedPragmas, fastlyDebug)
           : undefined,
@@ -344,6 +353,56 @@ export default function NewScan() {
               <span className="text-sm text-gray-700">Resource cache report</span>
               <span className="text-xs text-gray-400">(sub-resources: scripts, images, fonts, …)</span>
             </label>
+          )}
+
+          {mode === "single" && (
+            <div className="pl-0.5 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.enableBasicAuth}
+                  onChange={(e) => {
+                    setSettings((s) => ({ ...s, enableBasicAuth: e.target.checked }));
+                    if (!e.target.checked) setSettings((s) => ({ ...s, basicAuthUser: "", basicAuthPass: "" }));
+                  }}
+                  className="rounded border-gray-300 text-gray-600"
+                />
+                <span className="text-sm text-gray-700">Basic authentication</span>
+                <span className="text-xs text-gray-400">(HTTP Basic Auth credentials)</span>
+              </label>
+
+              {settings.enableBasicAuth && (
+                <div className="ml-6 p-3 rounded-lg border border-gray-200 bg-gray-50 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">Username</label>
+                      <input
+                        type="text"
+                        value={settings.basicAuthUser}
+                        onChange={(e) => setSettings((s) => ({ ...s, basicAuthUser: e.target.value }))}
+                        placeholder="username"
+                        autoComplete="off"
+                        className="input text-sm py-1.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">Password</label>
+                      <input
+                        type="password"
+                        value={settings.basicAuthPass}
+                        onChange={(e) => setSettings((s) => ({ ...s, basicAuthPass: e.target.value }))}
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        className="input text-sm py-1.5"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Sent as an <code className="bg-gray-100 px-1 rounded">Authorization: Basic</code> header on every HTTP probe and browser request.
+                  </p>
+                </div>
+              )}
+            </div>
           )}
 
           {mode === "single" && (

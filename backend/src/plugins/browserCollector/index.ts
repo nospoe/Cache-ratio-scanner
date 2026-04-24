@@ -45,6 +45,7 @@ export async function runBrowserCollection(
       timeoutMs: settings.browserTimeoutMs,
       collectResources: settings.scanResources && settings.mode === "single",
       extraHeaders: settings.debugHeaders,
+      basicAuth: settings.basicAuth,
     });
 
     log.debug(

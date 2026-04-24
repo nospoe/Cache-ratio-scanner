@@ -31,6 +31,7 @@ export interface BrowserOptions {
   timeoutMs?: number;
   collectResources?: boolean;
   extraHeaders?: Record<string, string>;
+  basicAuth?: { username: string; password: string };
 }
 
 export async function collectBrowserMetrics(
@@ -38,7 +39,7 @@ export async function collectBrowserMetrics(
   url: string,
   options: BrowserOptions
 ): Promise<CollectBrowserMetricsResult> {
-  const { deviceProfile, customViewport, customUserAgent, timeoutMs = 30000, collectResources = false, extraHeaders } = options;
+  const { deviceProfile, customViewport, customUserAgent, timeoutMs = 30000, collectResources = false, extraHeaders, basicAuth } = options;
   const viewport =
     deviceProfile === "mobile"
       ? MOBILE_VIEWPORT
@@ -52,6 +53,7 @@ export async function collectBrowserMetrics(
     viewport,
     userAgent: userAgent || undefined,
     ignoreHTTPSErrors: true,
+    httpCredentials: basicAuth,
   });
 
   const page = await context.newPage();

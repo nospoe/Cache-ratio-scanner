@@ -29,6 +29,7 @@ export interface ProbeOptions {
   userAgent?: string;
   headers?: Record<string, string>;
   validateSsrf?: boolean;
+  auth?: { username: string; password: string };
 }
 
 export async function runProbe(url: string, options: ProbeOptions = {}): Promise<ProbeRecord> {
@@ -38,6 +39,7 @@ export async function runProbe(url: string, options: ProbeOptions = {}): Promise
     userAgent = BROWSER_USER_AGENT,
     headers = {},
     validateSsrf = true,
+    auth,
   } = options;
 
   // SSRF check
@@ -81,6 +83,7 @@ export async function runProbe(url: string, options: ProbeOptions = {}): Promise
       validateStatus: () => true, // accept all status codes
       httpAgent,
       httpsAgent,
+      auth,
       headers: {
         "User-Agent": userAgent,
         ...BROWSER_HEADERS,
