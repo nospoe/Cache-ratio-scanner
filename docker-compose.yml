@@ -48,7 +48,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SSRF_PROTECTION: ${SSRF_PROTECTION:-true}
       MAX_SCAN_URLS: ${MAX_SCAN_URLS:-500}
-      AI_API_BASE_URL: ${AI_API_BASE_URL:-https://chat.netcentric.biz/api}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-http://localhost:11434/v1}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
@@ -80,7 +80,7 @@ services:
       MAX_WARM_ATTEMPTS: ${MAX_WARM_ATTEMPTS:-5}
       WARM_DELAY_MS: ${WARM_DELAY_MS:-500}
       SSRF_PROTECTION: ${SSRF_PROTECTION:-true}
-      AI_API_BASE_URL: ${AI_API_BASE_URL:-https://chat.netcentric.biz/api}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-http://localhost:11434/v1}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:

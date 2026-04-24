@@ -407,7 +407,7 @@ WARM_DELAY_MS=500
 SSRF_PROTECTION=true
 
 # AI cache analysis
-AI_API_BASE_URL=https://chat.netcentric.biz/api  # Custom (Ollama/LiteLLM) provider base URL
+AI_API_BASE_URL=http://localhost:11434/v1  # Custom (Ollama/LiteLLM) provider base URL
 OPENAI_API_KEY=your-openai-key-here              # OpenAI and Custom provider key
 ANTHROPIC_API_KEY=your-anthropic-key-here        # Anthropic (Claude) provider key
 ```
@@ -416,7 +416,7 @@ ANTHROPIC_API_KEY=your-anthropic-key-here        # Anthropic (Claude) provider k
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the custom/Ollama provider. The worker appends `/chat/completions` and `/models` to this base URL. Ignored for OpenAI and Anthropic providers. |
+| `AI_API_BASE_URL` | `http://localhost:11434/v1` | Base URL for the custom/Ollama provider. The worker appends `/chat/completions` and `/models` to this base URL. Ignored for OpenAI and Anthropic providers. |
 | `OPENAI_API_KEY` | *(empty)* | API key for the **OpenAI** and **Custom** providers. For OpenAI it authenticates against `api.openai.com`. For a custom provider it is sent as `Authorization: Bearer <key>` — leave empty if the endpoint does not require authentication. |
 | `ANTHROPIC_API_KEY` | *(empty)* | API key for the **Anthropic** provider. Sent as `x-api-key` header to `api.anthropic.com`. |
 

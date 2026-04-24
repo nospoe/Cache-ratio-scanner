@@ -299,7 +299,7 @@ Copy `.env.example` to `.env`. The defaults work for local use.
 | `PROBE_TIMEOUT_MS` | `15000` | HTTP probe timeout |
 | `MAX_WARM_ATTEMPTS` | `5` | Max warm requests per page |
 | `WARM_DELAY_MS` | `500` | Delay between warm requests |
-| `AI_API_BASE_URL` | `https://chat.netcentric.biz/api` | Base URL for the **custom** provider (Ollama / OpenAI-compatible server). Ignored when using OpenAI or Anthropic providers. |
+| `AI_API_BASE_URL` | `http://localhost:11434/v1` | Base URL for the **custom** provider (Ollama / OpenAI-compatible server). Ignored when using OpenAI or Anthropic providers. |
 | `OPENAI_API_KEY` | *(empty)* | API key for **OpenAI** and **Custom** providers. For OpenAI: authenticates against `api.openai.com`. For custom: sent as `Authorization: Bearer` — leave empty if not required. |
 | `ANTHROPIC_API_KEY` | *(empty)* | API key for the **Anthropic** provider. Sent as `x-api-key` header to `api.anthropic.com`. |
 
