@@ -72,6 +72,92 @@ The result is a full-stack cache and performance audit that goes well beyond hea
 
 ---
 
+## Architecture
+
+### Infrastructure topology
+
+```mermaid
+graph TB
+    User(["👤 Browser / API client"])
+
+    subgraph Docker ["Docker Compose"]
+        FE["Frontend\nnginx · React SPA\n:3000"]
+        API["API Server\nExpress · Node.js\n:3001"]
+        WK["Worker\nNode.js · Playwright\nBullMQ consumer"]
+        PG[("PostgreSQL 16\nscans · pages\ncache events · logs")]
+        RD[("Redis 7\njob queue\npub/sub log stream")]
+    end
+
+    Target(["🌐 Target website\n(CDN + origin)"])
+    AI(["🤖 AI Provider\nOpenAI / Anthropic\n/ Custom Ollama"])
+
+    User -->|"HTTP"| FE
+    User -->|"REST API"| API
+    FE -->|"REST + SSE"| API
+    API -->|"enqueue scan job"| RD
+    API <-->|"read / write"| PG
+    WK -->|"consume jobs"| RD
+    WK <-->|"read / write"| PG
+    WK -->|"publish log lines"| RD
+    API -->|"subscribe log stream SSE"| RD
+    WK -->|"HTTP probes + Playwright"| Target
+    WK -->|"AI cache analysis"| AI
+```
+
+### Scan pipeline
+
+```mermaid
+flowchart LR
+    A([URL input]) --> B
+
+    subgraph B ["① Cold probe"]
+        B1["HTTP GET\n— headers\n— status\n— latency / TTFB"]
+    end
+
+    B --> C
+
+    subgraph C ["② CDN detection"]
+        C1["Header adapters\nCloudflare · CloudFront\nFastly · Akamai\n+ generic heuristics"]
+    end
+
+    C --> D
+
+    subgraph D ["③ Warm loop"]
+        D1["Repeat GET until\nHIT observed or\nuncacheable signal\n(configurable attempts)"]
+    end
+
+    D --> E
+
+    subgraph E ["④ Cache normalisation"]
+        E1["Compute cold→warm\ntiming delta\nNormalise cache state\nCalculate hit ratio"]
+    end
+
+    E --> F
+
+    subgraph F ["⑤ Browser pass"]
+        F1["Playwright · Chromium\nLCP · FCP · CLS · TBT\nTTFB · Speed Index\nResource waterfall"]
+    end
+
+    F --> G
+
+    subgraph G ["⑥ Recommendations"]
+        G1["Rule-based engine\ncritical / warning / info\nacross cache · perf · CDN"]
+    end
+
+    G --> H
+
+    subgraph H ["⑦ AI analysis"]
+        H1["Full header set\n+ cold→warm delta\n+ warm event log\n→ verdict · hit ratio\n· CDN inference\n· recommendations"]
+    end
+
+    H --> I([Results stored\nin PostgreSQL])
+
+    style A fill:#e0f2fe,stroke:#0284c7
+    style I fill:#dcfce7,stroke:#16a34a
+```
+
+---
+
 ## Quick start
 
 You need **Docker** and **Docker Compose**.
