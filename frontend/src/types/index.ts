@@ -33,6 +33,7 @@ export interface ScanSettings {
   aiCacheAnalysis: boolean;
   aiProvider?: AiProvider;
   aiModel?: AiModel;
+  aiExtraPrompt?: string;
   scanResources: boolean;
   debugHeaders?: Record<string, string>;
   includePattern?: string;
@@ -118,6 +119,7 @@ export interface AiCacheAnalysisResult {
   confidence: number;
   model: string;
   inferred_cdn?: string | null;
+  operator_ack?: string | null;
   recommendations?: AiRecommendation[];
 }
 

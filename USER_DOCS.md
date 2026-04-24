@@ -102,6 +102,12 @@ When **AI cache analysis** is enabled, a provider toggle and model selector appe
 
 Available models are loaded dynamically from the provider at scan-creation time. If the provider is unreachable, a fallback list is shown.
 
+An optional **Extra prompt** text field is also shown when AI cache analysis is enabled. Any text entered there is appended verbatim to every AI request sent during the scan, after the HTTP probe data. Use it to give the model site-specific context that is not visible in the headers — for example:
+
+> "This site is served via Akamai. Focus on Surrogate-Control directives and flag any missing stale-while-revalidate settings."
+
+The extra prompt is stored in the scan settings and accepted up to 2000 characters.
+
 The AI analysis runs after all HTTP probes are complete for each page and adds an independent cache verdict with reasoning, an estimated hit ratio, and an AI-inferred CDN provider name.
 
 ### Advanced Settings
@@ -315,8 +321,9 @@ Content-Type: application/json
     "scanPerformance": true,
     "scanCache": true,
     "aiCacheAnalysis": false,
-    "aiProvider": "custom",    // "custom" | "openai"
+    "aiProvider": "custom",    // "custom" | "openai" | "anthropic"
     "aiModel": "gemma3:27b",
+    "aiExtraPrompt": "",       // optional — appended to every AI request for this scan
     "debugHeaders": {          // optional — single mode only
       "pragma": "akamai-x-cache-on, akamai-x-get-cache-key",
       "fastly-debug": "1"

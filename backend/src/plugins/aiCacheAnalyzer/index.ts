@@ -1,5 +1,6 @@
 import type { AiCacheAnalysisResult, AiModel, PageWorkingState } from "../../types";
 import { childLogger } from "../../utils/logger";
+import { publishScanLog } from "../../utils/scanLogger";
 
 const log = childLogger("aiCacheAnalyzer");
 
@@ -45,6 +46,7 @@ After reasoning, output ONLY a valid JSON object (no markdown, no extra text) wi
   "cache_hit_ratio": <float 0.0–1.0 — estimated proportion of requests that would be cache hits>,
   "confidence": <float 0.0–1.0 — how confident you are in this assessment>,
   "inferred_cdn": "<name of the CDN provider you identify from the headers, e.g. 'Akamai', 'Cloudflare', 'CloudFront', 'Fastly', or null if none detected>",
+  "operator_ack": "<if additional operator context was provided, write one sentence confirming you understood and acted on it; otherwise null>",
   "recommendations": [
     {
       "category": "<one of: performance | caching | security | cdn>",
@@ -101,6 +103,11 @@ function buildUserMessage(state: PageWorkingState): string {
     "Based on the headers above, determine whether this response was served from cache and estimate the cache hit ratio."
   );
 
+  const extra = state.settings.aiExtraPrompt?.trim();
+  if (extra) {
+    lines.push("", "Additional context from the operator:", extra);
+  }
+
   return lines.join("\n");
 }
 
@@ -147,7 +154,12 @@ function parseAiResponse(text: string): Omit<AiCacheAnalysisResult, "model"> {
         }))
     : [];
 
-  return { cached, reasoning, cache_hit_ratio, confidence, inferred_cdn, recommendations };
+  const operator_ack =
+    typeof parsed.operator_ack === "string" && parsed.operator_ack.trim()
+      ? parsed.operator_ack.trim().slice(0, 300)
+      : null;
+
+  return { cached, reasoning, cache_hit_ratio, confidence, inferred_cdn, operator_ack, recommendations };
 }
 
 export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageWorkingState> {
@@ -160,7 +172,18 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
 
   log.info({ pageId: state.pageId, url: state.url, model, endpoint, provider }, "Starting AI cache analysis");
 
+  const urlShort = state.url.replace(/^https?:\/\//, "").slice(0, 60);
+  await publishScanLog(state.scanId, "info",
+    `[AI] Hailing frequency open — transmitting cache telemetry for ${urlShort} to ${model}`,
+    "aiCacheAnalyzer");
+
   const userMessage = buildUserMessage(state);
+
+  if (state.settings.aiExtraPrompt?.trim()) {
+    await publishScanLog(state.scanId, "info",
+      `[AI] Operator's orders encoded and appended to transmission`,
+      "aiCacheAnalyzer");
+  }
 
   let requestBody: Record<string, unknown>;
   let requestHeaders: Record<string, string>;
@@ -316,6 +339,23 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
       },
       "AI cache analysis complete"
     );
+
+    const hitPct  = Math.round(result.cache_hit_ratio * 100);
+    const confPct = Math.round(result.confidence * 100);
+    const verdict = result.cached ? "CACHE HIT confirmed" : "CACHE MISS — shields down";
+    const cdnNote = result.inferred_cdn ? ` · CDN: ${result.inferred_cdn}` : "";
+    const recNote = result.recommendations && result.recommendations.length > 0
+      ? ` · ${result.recommendations.length} recommendation${result.recommendations.length !== 1 ? "s" : ""} logged`
+      : "";
+    await publishScanLog(state.scanId, "info",
+      `[AI] On screen, Captain — ${verdict} | hit ratio ${hitPct}% | confidence ${confPct}%${cdnNote} | ${latencyMs}ms${recNote}`,
+      "aiCacheAnalyzer");
+
+    if (result.operator_ack) {
+      await publishScanLog(state.scanId, "info",
+        `[AI] Message from the computer: "${result.operator_ack}"`,
+        "aiCacheAnalyzer");
+    }
   } catch (err) {
     const latencyMs = Date.now() - t0;
     const msg = err instanceof Error ? err.message : String(err);
@@ -323,6 +363,9 @@ export async function runAiCacheAnalysis(state: PageWorkingState): Promise<PageW
       { pageId: state.pageId, url: state.url, model, endpoint, latencyMs, err: msg },
       "AI cache analysis failed — skipping"
     );
+    await publishScanLog(state.scanId, "warn",
+      `[AI] We're losing the signal, Captain — analysis failed after ${latencyMs}ms: ${msg.slice(0, 120)}`,
+      "aiCacheAnalyzer");
     return state;
   }
 

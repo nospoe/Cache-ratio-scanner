@@ -54,6 +54,7 @@ export default function NewScan() {
     aiCacheAnalysis: boolean;
     aiProvider: AiProvider;
     aiModel: string;
+    aiExtraPrompt: string;
     scanResources: boolean;
     enableDebugHeaders: boolean;
     includePattern: string;
@@ -74,6 +75,7 @@ export default function NewScan() {
     aiCacheAnalysis: false,
     aiProvider: "custom" as AiProvider,
     aiModel: "",
+    aiExtraPrompt: "",
     scanResources: false,
     enableDebugHeaders: false,
     includePattern: "",
@@ -120,6 +122,7 @@ export default function NewScan() {
         excludePattern: settings.excludePattern || undefined,
         aiProvider: settings.aiCacheAnalysis ? settings.aiProvider : undefined,
         aiModel: settings.aiCacheAnalysis ? (settings.aiModel || modelsData?.models[0]) : undefined,
+        aiExtraPrompt: settings.aiCacheAnalysis && settings.aiExtraPrompt.trim() ? settings.aiExtraPrompt.trim() : undefined,
         debugHeaders: (mode === "single" && settings.enableDebugHeaders)
           ? buildDebugHeaders(selectedPragmas, fastlyDebug)
           : undefined,
@@ -311,6 +314,22 @@ export default function NewScan() {
               <p className="text-xs text-gray-400">
                 Uses AI to reason about cache headers and estimate hit ratio per page
               </p>
+              <div>
+                <label className="text-sm text-gray-600 block mb-1">
+                  Extra prompt <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={settings.aiExtraPrompt}
+                  onChange={(e) => setSettings((s) => ({ ...s, aiExtraPrompt: e.target.value }))}
+                  placeholder="e.g. This site uses Akamai with surrogate keys. Focus on Surrogate-Control directives and flag any missing stale-while-revalidate settings."
+                  rows={3}
+                  maxLength={2000}
+                  className="input text-sm resize-y"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Appended to each AI request as additional context. Max 2000 characters.
+                </p>
+              </div>
             </div>
           )}
 
