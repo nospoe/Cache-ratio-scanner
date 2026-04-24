@@ -34,9 +34,26 @@
 <img width="1480" height="657" alt="Screenshot 2026-04-23 at 11 22 08" src="https://github.com/user-attachments/assets/c4fe0062-e4c9-42ae-b11d-dd155c7fc54a" />
 
 <br><br><br>
-> **Vibecoded** with Claude. Architected and designed by a senior system engineer with more than 10 years of experience working with CDNs. A web performance and CDN cache scanner that actually warms the cache before measuring it.
+> **Vibecoded** with Claude. Architected and designed by a system engineer with over a decade of hands-on CDN experience.
 
-Most tools fire one HTTP request and read the cache header. Site Scanner does the following: it makes a cold request, warms the CDN cache with follow-up requests, then measures real browser performance on the warmed URL. The result is a much more accurate picture of what your users actually experience.
+Most tools fire one HTTP request and read a cache header. Site Scanner takes a different approach — one built around how CDNs actually behave in production.
+
+It starts with a **cold probe** to capture the origin baseline: HTTP status, response headers, TTFB, and full latency. It then executes a **warm loop** — firing follow-up requests until a cache HIT is confirmed or the CDN signals the content is uncacheable. Only then does it launch a **real browser** (Playwright) to measure user-facing performance on the warmed URL: LCP, FCP, CLS, TBT, TTFB, Speed Index, and a full resource waterfall.
+
+The cold-to-warm **timing delta** is at the core of every analysis. A sharp latency or TTFB drop between probes is a reliable indicator that the CDN edge is serving from cache — even when no explicit cache header is present. This delta feeds both the built-in cache state engine and the optional AI analyser.
+
+For DevOps and platform engineers, this translates into concrete, actionable output:
+
+- **Cache hit ratios** broken down by scope — overall, HTML documents, and static assets — so you can see exactly where cache efficiency is being lost
+- **Per-resource cache report** showing the cache state, latency, age, and size of every script, image, font, and XHR request the browser made — not just the HTML document
+- **CDN detection** with confidence scoring and the specific header signals that triggered it, across Cloudflare, CloudFront, Fastly, and Akamai
+- **AI cache analysis** — an LLM examines the full header set and cold-to-warm timing delta independently of vendor-specific adapters, returning a structured verdict with reasoning, an estimated hit ratio, an inferred CDN provider, and prioritised recommendations across caching, performance, security, and CDN configuration
+- **Operator context** — inject site-specific knowledge directly into the AI prompt so the model can reason about your specific CDN configuration, surrogate key strategy, or known caching quirks
+- **Scan-level aggregates** across hundreds of pages — LCP averages, P95, cache hit distribution, CDN spread — with cross-scan rankings to surface your worst-performing pages over time
+- **Actionable recommendations** generated per page with severity levels, category, and evidence drawn from the actual response headers and timing data
+- **Live scan log terminal** streaming every step of the scan in real time — probe results, AI transmissions, cache verdicts — so you can follow exactly what is happening as it happens
+
+The result is a full-stack cache and performance audit that goes well beyond header inspection — giving you the data to confidently tune CDN configuration, identify uncacheable content, validate cache warming strategies, and quantify the real-world performance impact of caching decisions.
 
 ---
 
@@ -46,10 +63,12 @@ Most tools fire one HTTP request and read the cache header. Site Scanner does th
 - Detects your CDN (Cloudflare, CloudFront, Fastly, Akamai) automatically
 - Measures cold vs. warmed cache states per page
 - Runs a real browser (Playwright) to collect LCP, FCP, CLS, TBT, TTFB
+- **Resource Cache Report** — per-resource breakdown of cache states for every script, image, font, and XHR loaded by the page (Single URL only)
 - Ranks pages across scans so you can spot your worst offenders
 - Exports results as CSV or JSON
 - Generates actionable recommendations (critical / warning / info)
-- **AI cache analysis** — optionally uses an LLM to reason about response headers and estimate the cache hit ratio independently of CDN-specific header patterns
+- **AI cache analysis** — optionally uses an LLM to reason about response headers and estimate the cache hit ratio independently of CDN-specific header patterns; includes per-page AI recommendations across performance, caching, security, and CDN categories
+- **Scan log terminal** — live-streaming terminal panel on the scan dashboard showing every step of the scan in real time
 
 ---
 
@@ -110,6 +129,8 @@ docker compose down
 | AI cache analysis | Off | Use an LLM to reason about headers and estimate cache hit ratio |
 | AI provider | Custom | **Custom** (Ollama / any OpenAI-compatible server), **OpenAI** (direct ChatGPT), or **Anthropic** (Claude models) |
 | AI model | — | Fetched live from the selected provider; falls back to a default list if unreachable |
+| AI extra prompt | — | Optional free-text appended to every AI request — use it to give the model site-specific context (e.g. CDN config, known quirks) |
+| Resource cache report | Off | Per-resource cache breakdown for all sub-resources (Single URL only) |
 | Debug headers | Off | Inject CDN diagnostic request headers (Single URL only) — surfaces hidden cache metadata in response headers |
 
 ---
@@ -126,6 +147,7 @@ Aggregate view of a completed scan:
 - Overall / document / static asset cache hit ratios
 - CDN distribution across all pages
 - **AI cache analysis summary** (when enabled): pages analysed, AI-judged cached count, average AI-estimated hit ratio, average confidence
+- **Scan log terminal** — collapsible dark terminal panel showing a live stream of every scan step (URL probed, AI transmissions, completions, errors) in real time during the scan and historically after it completes
 
 ### Page table
 Every scanned page in a sortable, filterable table. Filter by CDN provider, cache state, or search by URL. Sort by LCP, TTFB, size, request count, or cache hit ratio.
@@ -142,8 +164,9 @@ The full breakdown for a single page:
 - Cache state timeline (every probe request with its cache state, age header, and latency)
 - Response headers for cold and warm probes (tabbed view)
 - Warm outcome: what happened after the cache warming cycle
-- AI cache analysis (when enabled): LLM reasoning, estimated hit ratio, confidence score, and AI-inferred CDN provider
-- Recommendations with evidence
+- AI cache analysis (when enabled): LLM reasoning, estimated hit ratio, confidence score, AI-inferred CDN provider, and AI-generated recommendations across performance / caching / security / CDN categories
+- **Resource Cache Report** (Single URL + resource report enabled): every sub-resource the browser loaded, grouped by type, with cache state, HTTP status, latency, age, and size
+- Actionable recommendations with severity and evidence
 
 ### Global rankings
 Cross-scan comparison. See which pages and scans perform best and worst for LCP, TTFB, or cache hit ratio — across your entire history. Cache hit ratio ranks by scan aggregate (not per-page).
@@ -179,11 +202,35 @@ Cross-scan comparison. See which pages and scans perform best and worst for LCP,
 
 ## AI Cache Analysis
 
-AI cache analysis is an **optional, per-scan feature** that sends each page's response headers and real latency measurements to an LLM. The model reasons about cache state indicators and returns a structured verdict — independently of the built-in CDN adapter logic.
+AI cache analysis is an **optional, per-scan feature** that feeds each page's full probe dataset to an LLM and asks it to reason independently about cache behaviour. The result is a second opinion that sits alongside — and can corroborate or contradict — the built-in CDN adapter verdict.
 
 ### Why it exists
 
-The conventional cache analysis relies on vendor-specific header adapters (Cloudflare, CloudFront, Fastly, Akamai). If a site sits behind a custom proxy, an obscure CDN, or strips its cache headers, those adapters return `UNKNOWN`. The AI analyser reads the full header set and applies general HTTP caching knowledge, often surfacing useful signal even when no CDN fingerprint is present. It also incorporates real latency data: a significant TTFB/latency drop from cold to warmed probe is treated as a strong CDN edge-caching signal.
+The conventional cache analysis relies on vendor-specific header adapters (Cloudflare, CloudFront, Fastly, Akamai). If a site sits behind a custom proxy, an obscure CDN, or deliberately strips its cache headers, those adapters return `UNKNOWN`. The AI analyser has no such blind spots: it reads the full header set, applies broad HTTP caching knowledge, and crucially, **reasons about the measured performance delta between cold and warm probes** — a signal that header-only tools cannot exploit.
+
+A dramatic latency or TTFB drop from the cold probe to the warmed probe is a strong indicator that the CDN edge is serving subsequent requests from cache, even when no `X-Cache: HIT` header is present. The model weighs this alongside the headers to reach a more holistic verdict.
+
+### What the model reasons about
+
+**Header signals:**
+- `Cache-Control` — `max-age`, `s-maxage`, `no-cache`, `no-store`, `public`, `private`, `stale-while-revalidate`
+- `Age` — seconds the object has been cached; any value > 0 is a strong HIT indicator
+- `CF-Cache-Status`, `X-Cache`, `X-Cache-Status` — CDN-specific cache state headers
+- `Vary` — cache key dimensions; misuse can fragment the cache and destroy hit rates
+- `Set-Cookie` — presence on cacheable content is a common cause of cache bypass
+- `Via`, `X-Served-By` — proxy and CDN routing signals
+- `ETag`, `Last-Modified` — validators that indicate the resource is cacheable
+- `Pragma`, `Expires` — legacy cache control
+- `Surrogate-Control`, `Surrogate-Key` — CDN override and tag-based purge headers
+- `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy` — security header presence
+- Akamai-specific: `X-Akamai-Request-Id`, `X-Check-Cacheable`, `X-Cache-Key`, `X-True-Cache-Key`, server signatures
+
+**Timing signals (the warm vs. cold delta):**
+- Latency reduction from cold → warm probe — a >50% drop is a strong edge-caching signal
+- TTFB on warm probes — CDN HITs typically show TTFB < 20 ms and latency < 50 ms
+- Flat latency across all warm attempts — indicates the CDN is not caching the resource
+- Absence of `Age` header despite low warm latency — characteristic of CDN configs that omit Age emission (common in some Akamai setups)
+- Full warm event timeline — every probe request with its cache state, latency, and HTTP status
 
 ### Providers
 
@@ -208,21 +255,24 @@ Cold probe → Warm loop → CDN detection → Cache normalisation → Browser m
 ```
 
 For each page the worker sends to the model:
-- Cold probe: HTTP status, headers, latency, TTFB
-- Warmed probe: HTTP status, headers, latency, TTFB (if available)
-- All warm events with request number, cache state, and latency
+- **Cold probe** — HTTP status, full response headers, total latency, TTFB
+- **Warmed probe** — HTTP status, full response headers, total latency, TTFB (if available)
+- **Full warm event log** — every warming request with its request number, phase, cache state, HTTP status, and latency
+- **Operator extra prompt** (if set) — site-specific context appended to every request
 
-The model reasons about headers (`Cache-Control`, `CF-Cache-Status`, `X-Cache`, `Age`, `Vary`, `Via`, `Set-Cookie`, `Surrogate-Control`, Akamai-specific headers, etc.) alongside timing signals, then returns a structured JSON result.
+The model performs step-by-step reasoning over all of the above before committing to a structured JSON verdict.
 
 ### Output per page
 
 | Field | Type | Description |
 |---|---|---|
-| `cached` | boolean | Whether the response was judged to be served from cache |
-| `reasoning` | string | Step-by-step explanation referencing specific headers and latency |
+| `cached` | boolean | Whether the response was judged to be served from CDN cache on warm requests |
+| `reasoning` | string | Step-by-step explanation referencing specific headers and the cold→warm timing delta |
 | `cache_hit_ratio` | float 0–1 | Estimated proportion of requests that would be cache hits |
 | `confidence` | float 0–1 | Model's self-assessed confidence in the verdict |
 | `inferred_cdn` | string \| null | CDN provider identified from headers (e.g. `"Akamai"`, `"Cloudflare"`) |
+| `operator_ack` | string \| null | One-sentence confirmation that the model understood and applied the extra prompt (null if none was set) |
+| `recommendations` | array | 1–5 actionable improvement suggestions, each with `category` (performance / caching / security / cdn), `priority` (high / medium / low), `title`, and `description` — only included when directly supported by the observed evidence |
 | `model` | string | The model that produced this result |
 
 Stored as `ai_cache_analysis` JSONB on the `page_results` table. Visible in the **Page Detail** view.
@@ -240,7 +290,8 @@ When AI analysis was enabled the **Scan Dashboard** shows a summary card with:
 1. Tick **AI cache analysis** in the New Scan form
 2. Select **Custom**, **OpenAI**, or **Anthropic** as the provider
 3. Select a model from the dropdown (loaded live from the provider)
-4. Set the relevant environment variables in `.env` (see below)
+4. Optionally enter an **extra prompt** — free text appended to every AI request to give the model site-specific context (e.g. CDN configuration details, known caching quirks, or specific areas to focus on). The model acknowledges receipt of the extra prompt in the `operator_ack` field of its response.
+5. Set the relevant environment variables in `.env` (see below)
 
 **Failures are non-fatal.** Network errors, HTTP errors, timeouts, and JSON parse failures are logged and skipped — the scan continues and the AI result for that page is simply absent. Set `LOG_LEVEL=debug` to see the full request payload and raw model response in worker logs.
 
