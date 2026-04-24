@@ -7,7 +7,7 @@
 
 <br><br>
 
-<img width="1444" height="917" alt="Screenshot 2026-04-24 at 20 15 35" src="https://github.com/user-attachments/assets/2465c0aa-cfc3-4f2a-86de-53764a35d7c8" />
+<img width="1444" height="892" alt="Screenshot 2026-04-24 at 21 08 02" src="https://github.com/user-attachments/assets/0c154b08-e3d5-4b2c-8858-4a327342730f" />
 
 <br><br>
 
