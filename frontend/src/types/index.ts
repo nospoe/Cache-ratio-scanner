@@ -30,6 +30,7 @@ export interface ScanSettings {
   normalizeQuerystrings: boolean;
   scanPerformance: boolean;
   scanCache: boolean;
+  basicAuth?: { username: string; password: string };
   aiCacheAnalysis: boolean;
   aiProvider?: AiProvider;
   aiModel?: AiModel;

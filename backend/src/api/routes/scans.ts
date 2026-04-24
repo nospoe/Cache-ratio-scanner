@@ -30,6 +30,10 @@ const settingsSchema = z.object({
   includePattern: z.string().max(200).optional(),
   excludePattern: z.string().max(200).optional(),
   headers: z.record(z.string()).optional(),
+  basicAuth: z.object({
+    username: z.string().max(200),
+    password: z.string().max(200),
+  }).optional(),
   scanPerformance: z.boolean().optional(),
   scanCache: z.boolean().optional(),
   aiCacheAnalysis: z.boolean().optional(),

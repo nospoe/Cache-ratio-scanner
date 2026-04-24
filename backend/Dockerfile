@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim
 
-# Install system deps for Playwright Chromium
+# Install system deps for Playwright Chromium (must run as root)
 RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
@@ -42,19 +42,26 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
+# Create target dirs owned by the node user (uid 1000) before switching user.
+# This avoids an expensive chown -R over the full Chromium installation later.
+RUN mkdir -p /app /ms-playwright && chown node:node /app /ms-playwright
+
+# Switch to non-root for all subsequent steps
+USER node
 WORKDIR /app
 
-# Install all deps (including devDeps for tsc)
-COPY package.json package-lock.json* ./
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Install dependencies
+COPY --chown=node:node package.json package-lock.json* ./
 RUN npm install
 
-# Install Playwright and Chromium browser
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Install Playwright Chromium — runs as node so files are node-owned from creation
 RUN npx playwright install chromium
 
-# Copy source and build
-COPY tsconfig.json ./
-COPY src ./src
+# Build
+COPY --chown=node:node tsconfig.json ./
+COPY --chown=node:node src ./src
 RUN npm run build
 
 # Copy SQL migrations (tsc doesn't copy non-TS files)
@@ -63,7 +70,6 @@ RUN cp -r src/db/migrations dist/db/migrations
 # Prune dev deps after build
 RUN npm prune --omit=dev
 
-# Health check
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
   CMD curl -sf http://localhost:3001/health || exit 1
 

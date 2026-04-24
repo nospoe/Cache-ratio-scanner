@@ -19,6 +19,7 @@ export async function runHttpProbePhase(
     maxRedirects: settings.maxRedirects,
     headers: { ...settings.headers, ...settings.debugHeaders },
     validateSsrf: process.env.SSRF_PROTECTION !== "false",
+    auth: settings.basicAuth,
     ...probeOptions,
   });
 
@@ -46,6 +47,7 @@ export async function runHttpProbePhase(
         maxRedirects: settings.maxRedirects,
         headers: { ...settings.headers, ...settings.debugHeaders },
         validateSsrf: process.env.SSRF_PROTECTION !== "false",
+        auth: settings.basicAuth,
         ...probeOptions,
       },
     }
