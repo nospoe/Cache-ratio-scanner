@@ -74,36 +74,6 @@ The result is a full-stack cache and performance audit that goes well beyond hea
 
 ## Architecture
 
-### Infrastructure topology
-
-```mermaid
-graph TB
-    User(["👤 Browser / API client"])
-
-    subgraph Docker ["Docker Compose"]
-        FE["Frontend\nnginx · React SPA\n:3000"]
-        API["API Server\nExpress · Node.js\n:3001"]
-        WK["Worker\nNode.js · Playwright\nBullMQ consumer"]
-        PG[("PostgreSQL 16\nscans · pages\ncache events · logs")]
-        RD[("Redis 7\njob queue\npub/sub log stream")]
-    end
-
-    Target(["🌐 Target website\n(CDN + origin)"])
-    AI(["🤖 AI Provider\nOpenAI / Anthropic\n/ Custom Ollama"])
-
-    User -->|"HTTP"| FE
-    User -->|"REST API"| API
-    FE -->|"REST + SSE"| API
-    API -->|"enqueue scan job"| RD
-    API <-->|"read / write"| PG
-    WK -->|"consume jobs"| RD
-    WK <-->|"read / write"| PG
-    WK -->|"publish log lines"| RD
-    API -->|"subscribe log stream SSE"| RD
-    WK -->|"HTTP probes + Playwright"| Target
-    WK -->|"AI cache analysis"| AI
-```
-
 ### Scan pipeline
 
 ```mermaid
